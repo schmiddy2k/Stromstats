@@ -11,6 +11,21 @@ from model import validate_contract
 
 
 class ReportTest(unittest.TestCase):
+    def test_contracts_sorted_by_start_not_creation(self):
+        with tempfile.TemporaryDirectory() as temp, patch.object(server, "DATA_DIR", Path(temp)), patch.object(server, "DB", Path(temp) / "contracts.sqlite3"):
+            with server.database() as conn:
+                for start in ("2025-01-01", "2024-01-01", "2026-01-01"):
+                    contract = validate_contract({"provider": start, "tariff": "B", "start": start, "end": start, "base_monthly": "10", "price_kwh": "0.2", "contract_kwh": "1000"})
+                    conn.execute("INSERT INTO contracts(body) VALUES(?)", (json.dumps(contract),))
+            self.assertEqual([c["start"] for c in server.contracts()], ["2026-01-01", "2025-01-01", "2024-01-01"])
+
+    def test_interior_readings_update_without_removing_existing(self):
+        contract = validate_contract({"provider": "A", "tariff": "B", "start": "2025-01-01", "end": "2026-12-31", "base_monthly": "10", "price_kwh": "0.2", "contract_kwh": "1000"})
+        self.assertEqual(server.reading_updates({}, contract), {})
+        self.assertEqual(server.reading_updates({"reading_changes": {"2026-01-01": "550", "2025-06-01": None}}, contract), {"2026-01-01": "550", "2025-06-01": None})
+        with self.assertRaises(ValueError):
+            server.reading_updates({"reading_changes": {"2027-01-01": "900"}}, contract)
+
     def test_finished_contract_without_sensor_uses_boundary_readings(self):
         with tempfile.TemporaryDirectory() as temp, patch.object(server, "DATA_DIR", Path(temp)), patch.object(server, "DB", Path(temp) / "contracts.sqlite3"):
             contract = validate_contract({"provider": "A", "tariff": "B", "start": "2025-12-31", "end": "2026-01-01", "base_monthly": "10", "price_kwh": "0.2", "contract_kwh": "1000", "entity_id": ""})

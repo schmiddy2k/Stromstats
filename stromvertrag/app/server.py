@@ -49,7 +49,8 @@ def ha(method: str, path: str, body: dict | None = None):
 
 def contracts():
     with database() as conn:
-        return [dict(id=row["id"], **json.loads(row["body"])) for row in conn.execute("SELECT id, body FROM contracts ORDER BY id DESC")]
+        result = [dict(id=row["id"], **json.loads(row["body"])) for row in conn.execute("SELECT id, body FROM contracts")]
+    return sorted(result, key=lambda contract: (contract["start"], contract["id"]), reverse=True)
 
 
 def readings(contract_id: int):
@@ -78,6 +79,31 @@ def boundary_updates(raw: dict, contract: dict) -> dict[str, str | None]:
     if updates.get(dates["start_reading"]) is not None and updates.get(dates["end_reading"]) is not None:
         if Decimal(updates[dates["end_reading"]]) < Decimal(updates[dates["start_reading"]]):
             raise ValueError("Endzählerstand liegt vor dem Anfangszählerstand")
+    return updates
+
+
+def reading_updates(raw: dict, contract: dict) -> dict[str, str | None]:
+    """Optional interior readings submitted with a contract edit."""
+    changes = raw.get("reading_changes", {})
+    if not isinstance(changes, dict) or len(changes) > 200:
+        raise ValueError("Ungültige Ablesungen")
+    first = date.fromisoformat(contract["start"])
+    last = date.fromisoformat(contract["end"]) + timedelta(days=1)
+    updates = {}
+    for day, raw_value in changes.items():
+        parsed = parse_date(day, "Ablesedatum")
+        if raw_value is not None and str(raw_value).strip() != "" and not first < parsed < last:
+            raise ValueError("Ablesedatum muss innerhalb der Vertragslaufzeit liegen")
+        if raw_value is None or str(raw_value).strip() == "":
+            updates[day] = None
+            continue
+        try:
+            value = Decimal(str(raw_value).replace(",", "."))
+        except InvalidOperation:
+            raise ValueError("Ungültiger Zählerstand") from None
+        if not value.is_finite() or value < 0:
+            raise ValueError("Zählerstand muss mindestens 0 sein")
+        updates[day] = str(value)
     return updates
 
 
@@ -161,6 +187,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, contracts())
         elif self.command == "GET" and path == "/api/report":
             self._send(200, report())
+        elif self.command == "GET" and path == "/api/settings":
+            config = ha("GET", "/config")
+            self._send(200, {"language": config.get("language") or "de"})
         elif self.command == "GET" and path == "/api/entities":
             states = ha("GET", "/states")
             sensors = []
@@ -173,6 +202,7 @@ class Handler(BaseHTTPRequestHandler):
             raw = self._json()
             body = validate_contract(raw)
             updates = boundary_updates(raw, body)
+            updates.update(reading_updates(raw, body))
             with LOCK, database() as conn:
                 cursor = conn.execute("INSERT INTO contracts(body) VALUES(?)", (json.dumps(body),))
                 save_boundaries(conn, cursor.lastrowid, updates)
@@ -186,6 +216,7 @@ class Handler(BaseHTTPRequestHandler):
                     raw = self._json()
                     body = validate_contract(raw)
                     updates = boundary_updates(raw, body)
+                    updates.update(reading_updates(raw, body))
                     conn.execute("UPDATE contracts SET body=? WHERE id=?", (json.dumps(body), contract_id))
                     save_boundaries(conn, contract_id, updates)
                 else:
