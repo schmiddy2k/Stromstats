@@ -51,6 +51,14 @@ class ModelTest(unittest.TestCase):
     def test_contract_without_sensor(self):
         self.assertEqual(validate_contract({**RAW, "entity_id": ""})["entity_id"], "")
 
+    def test_paid_installments_are_optional_and_validated(self):
+        self.assertIsNone(validate_contract(RAW)["paid_installments"])
+        self.assertIsNone(validate_contract({**RAW, "paid_installments": ""})["paid_installments"])
+        self.assertEqual(validate_contract({**RAW, "paid_installments": "0"})["paid_installments"], "0")
+        self.assertEqual(validate_contract({**RAW, "paid_installments": "123,45"})["paid_installments"], "123.45")
+        with self.assertRaises(ValueError):
+            validate_contract({**RAW, "paid_installments": "-1"})
+
     def test_completed_contract_estimates_only_missing_years(self):
         contract = validate_contract({**RAW, "start": "2025-01-01", "end": "2026-12-31"})
         periods = sections(contract, date(2027, 1, 1))

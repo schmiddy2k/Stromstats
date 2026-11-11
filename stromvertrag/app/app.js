@@ -262,15 +262,26 @@ function render() {
     table.append(tbody); tableWrap.append(table); card.append(tableWrap);
 
     const summary = node('div', '', 'summary');
+    const paid = contract.paid_installments == null || contract.paid_installments === '' ? null : Number(contract.paid_installments);
     for (const [label, value] of [
       [finished ? 'Verbrauch gesamt' : 'Verbrauch bisher', hasTotal ? kwh(totalKwh) : '–'],
       [finished ? 'Effektive Gesamtkosten' : 'Effektive Kosten bisher', hasTotal ? euro(total) : '–'],
       ['Effektive Kosten je kWh', hasTotal && totalKwh > 0 ? euroPerKwh(total / totalKwh) : '–'],
+      ['Gezahlte Abschläge', paid == null ? '–' : euro(paid)],
     ]) {
       const paragraph = node('p');
       paragraph.append(node('strong', label), node('span', value, 'summary-value'));
       summary.append(paragraph);
     }
+    if (paid != null && hasTotal) {
+      const difference = Math.round((total - paid) * 100) / 100;
+      const label = difference > 0 ? 'Nachzahlung' : difference < 0 ? 'Guthaben' : 'Ausgeglichen';
+      const prefix = finished && complete && !estimated ? '' : 'Vorläufig: ';
+      const settlement = node('p', '', 'settlement');
+      settlement.append(node('strong', prefix + label), node('span', euro(Math.abs(difference)), 'summary-value'));
+      summary.append(settlement);
+    }
+    if (paid == null) summary.append(node('span', 'Für Nachzahlung oder Guthaben die gezahlten Abschläge im Vertrag ergänzen.', 'summary-note'));
     if (!complete || estimated) summary.append(node('span', [!complete ? 'Messdaten lückenhaft' : '', estimated ? 'Jahresanteile geschätzt' : ''].filter(Boolean).join(' · '), 'summary-note'));
     card.append(summary);
     if (!contract.years.length) card.append(node('p', 'Dieser Vertrag beginnt in der Zukunft.', 'muted'));

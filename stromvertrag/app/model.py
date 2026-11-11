@@ -40,6 +40,8 @@ def validate_contract(raw: dict) -> dict:
         if key.startswith("bonus") and (value is None or str(value).strip() == ""):
             value = 0
         result[key] = str(money(value, key))
+    paid = raw.get("paid_installments")
+    result["paid_installments"] = None if paid is None or str(paid).strip() == "" else str(money(paid, "Gezahlte Abschläge"))
     return result
 
 

@@ -8,14 +8,14 @@ Das Verzeichnis `stromvertrag` als lokales Add-on unter `/addons/stromvertrag` i
 
 ## Verwendung
 
-1. Vertrag mit Anbieter, Tarif, Start- und Enddatum, Grundgebühr, Arbeitspreis, Abschlussmenge und bis zu drei Boni anlegen.
+1. Vertrag mit Anbieter, Tarif, Start- und Enddatum, Grundgebühr, Arbeitspreis, Abschlussmenge und bis zu drei Boni anlegen. Optional die Summe der tatsächlich gezahlten Abschläge eintragen.
 2. Optional einen kumulativen Energie-Sensor auswählen, der Langzeitstatistiken liefert. Derselbe Sensor kann im Energy Dashboard verwendet werden. Die Statistik wird in kWh angefragt.
 3. Für abgeschlossene Verträge ohne vollständige Sensordaten im Vertragsformular den Zählerstand am Vertragsbeginn und am **Tag nach Vertragsende** eingeben. Bei Verträgen über mehrere Jahre werden fehlende Jahresanteile nach Kalendertagen geschätzt und entsprechend markiert. Vorhandene vollständige Jahresstatistiken bleiben erhalten.
 4. Für exakte Jahreswerte unter **Bearbeiten → Weitere Ablesungen** zusätzlich die Zählerstände am jeweiligen Jahreswechsel eintragen. Für einen Jahreszeitraum werden **beide** Grenzstände benötigt; deren Differenz ersetzt dann die Statistik dieses Zeitraums. Die Vertragsübersicht zeigt nur Ergebnisse.
 
 Im Vertragsformular zeigt **Voraussichtliche Vertragskosten** laufend die Gesamtkosten auf Basis der vereinbarten kWh-Menge und der eingetragenen Preise und Boni. Das ist eine Planung; die Ist-Kosten in der Übersicht verwenden Messdaten oder manuelle Zählerstände. Die Vertragsübersicht zeigt die neuesten Vertragsbeginne zuerst. Bei abgeschlossenen Verträgen heißen die Summen „Verbrauch gesamt“ und „Effektive Gesamtkosten“. Die Icons in „Datenlage“ zeigen ihren genauen Status als Tooltip und für Screenreader an.
 
-Die Jahreswerte stehen in einer kompakten Tabelle. Darunter zeigt ein hervorgehobener Summenbereich Verbrauch, effektive Kosten und die **effektiven Kosten je ausgewerteter kWh** (effektive Kosten geteilt durch Verbrauch). Bei Lücken oder geschätzten Jahresanteilen steht dort ein entsprechender Hinweis.
+Die Jahreswerte stehen in einer kompakten Tabelle. Darunter zeigt ein hervorgehobener Summenbereich Verbrauch, effektive Kosten und die **effektiven Kosten je ausgewerteter kWh** (effektive Kosten geteilt durch Verbrauch). Zusätzlich stehen dort die gezahlten Abschläge und der Saldo: **effektive Kosten einschließlich Grundgebühr und nach Boni minus gezahlte Abschläge**. Ein positiver Saldo ist eine Nachzahlung, ein negativer Saldo ein Guthaben. Für laufende Verträge, unvollständige Messdaten oder geschätzte Jahresanteile ist der Saldo als vorläufig gekennzeichnet. Ohne eingetragene Abschläge oder ohne berechenbare Ist-Kosten bleibt der Saldo leer. Bei Lücken oder geschätzten Jahresanteilen steht dort ein entsprechender Hinweis.
 
 Die Jahresauswertung verwendet stündliche `change`-Werte aus der Recorder-Langzeitstatistik. Fehlen Stunden, erscheint **Statistik (unvollständig)**. Fehlen alle Messwerte, bleiben Verbrauch und verbrauchsabhängige Kosten leer. Manuelle Ablesungen müssen in derselben Einheit (kWh) und vom selben Zähler stammen.
 
@@ -23,7 +23,7 @@ Die Grundgebühr wird je angefangenem Kalendermonat nach tatsächlichen Tagen au
 
 ## Update und Datenerhalt
 
-Version `0.5.0` verwendet dieselbe Datenbank und dieselben Tabellen wie die Vorversionen. Alte Verträge und Ablesungen bleiben erhalten. Alle Ablesungen werden im Bearbeitungsbereich geändert. Leere Grenzstandfelder löschen nur einen zuvor eingetragenen Grenzstand an genau diesem Datum; andere Ablesungen bleiben bestehen. Vor dem Update empfiehlt sich ein Home-Assistant-Backup des Add-ons. Das Add-on wird für ein konsistentes Backup kurz angehalten (`backup: cold`).
+Version `0.6.0` verwendet dieselbe Datenbank und dieselben Tabellen wie die Vorversionen. Alte Verträge und Ablesungen bleiben erhalten. Das neue Feld für gezahlte Abschläge ist optional und bei bestehenden Verträgen zunächst leer. Alle Ablesungen werden im Bearbeitungsbereich geändert. Leere Grenzstandfelder löschen nur einen zuvor eingetragenen Grenzstand an genau diesem Datum; andere Ablesungen bleiben bestehen. Vor dem Update empfiehlt sich ein Home-Assistant-Backup des Add-ons. Das Add-on wird für ein konsistentes Backup kurz angehalten (`backup: cold`).
 
 Verträge werden nach Vertragsbeginn (neueste zuerst) angezeigt. Die Datumsanzeige nutzt die Sprache der Home-Assistant-Systemkonfiguration, z. B. `de` für `31.12.2025`. Die Eingabefelder für Daten sind native Browser-Datumsfelder; deren Kalenderdarstellung kann zusätzlich von der Browser- oder Gerätesprache abhängen.
 

@@ -40,6 +40,8 @@ legend { font-weight: 500; padding: 0 6px; }
 .summary p { margin: 0; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .summary strong { font-size: .79rem; font-weight: 700; }
 .summary .summary-value { font-size: 1.14rem; font-weight: 600; overflow-wrap: anywhere; }
+.summary .settlement { grid-column: 1 / -1; border-top: 1px solid var(--divider-color, var(--app-divider)); padding-top: 12px; }
+.summary .settlement .summary-value { color: var(--primary-text-color, var(--app-text)); }
 .summary-note { grid-column: 1 / -1; color: var(--secondary-text-color, var(--app-secondary)); font-size: .78rem; }
 .tablewrap { overflow: auto; margin-top: 18px; border: 1px solid var(--divider-color, var(--app-divider)); border-radius: 8px; }
 table { border-collapse: collapse; width: 100%; white-space: nowrap; font-size: .84rem; }
@@ -103,11 +105,12 @@ tr:last-child td { border-bottom: 0; }
 <label>Bonus 1 €<input name="bonus1" type="number" min="0" step="0.01" value="0"></label>
 <label>Bonus 2 €<input name="bonus2" type="number" min="0" step="0.01" value="0"></label>
 <label>Bonus 3 €<input name="bonus3" type="number" min="0" step="0.01" value="0"></label>
+<label class="wide">Gezahlte Abschläge gesamt €<input name="paid_installments" type="number" min="0" step="0.01" placeholder="Optional"><span class="hint">Summe aller tatsächlich gezahlten Abschläge für diesen Vertrag.</span></label>
 <section class="preview" aria-live="polite"><h3>Voraussichtliche Vertragskosten</h3><p class="hint">Berechnet mit der vereinbarten kWh-Menge über die gesamte Laufzeit. Die tatsächlichen Kosten stehen in der Vertragsübersicht.</p><div id="preview-content" class="hint">Laufzeit, Grundgebühr, Arbeitspreis und kWh-Menge eingeben.</div></section>
 <fieldset><legend>Manuelle Zählerstände</legend><p class="hint">Optional für abgeschlossene Verträge ohne vollständige Sensordaten. Bitte den Zählerstand am Vertragsbeginn und am Tag nach Vertragsende in kWh eintragen.</p><div class="boundary-fields"><label>Stand bei Vertragsbeginn (kWh)<input name="start_reading" type="number" min="0" step="0.001" placeholder="Optional"></label><label>Stand nach Vertragsende (kWh)<input name="end_reading" type="number" min="0" step="0.001" placeholder="Optional"></label></div></fieldset>
 <div class="actions"><button type="submit">Speichern</button><button type="button" class="secondary" id="cancel">Abbrechen</button></div></form>
 <div id="reading-editor" class="hidden"><h3>Weitere Ablesungen</h3><p class="hint">Für genaue Jahreswerte eine Ablesung zum 1. Januar eintragen. Änderungen werden zusammen mit dem Vertrag gespeichert.</p><div class="reading"><label>Ablesedatum<input id="reading-date" type="date"></label><label>Zählerstand (kWh)<input id="reading-value" type="number" min="0" step="0.001"></label><button type="button" id="reading-add" class="secondary">Ablesung übernehmen</button></div><ul id="reading-list" class="reading-list"></ul></div>
 </section>
 <div id="contracts"></div>
-<p class="hint">Brutto = Grundgebühr + Verbrauch × Arbeitspreis. Effektiv = Brutto − anteilige Boni. Boni werden nach Vertragstagen, Grundgebühren nach Kalendermonatstagen verteilt. Schätzwerte sind gekennzeichnet.</p>
+<p class="hint">Brutto = Grundgebühr + Verbrauch × Arbeitspreis. Effektiv = Brutto − anteilige Boni. Nachzahlung oder Guthaben = effektive Kosten − gezahlte Abschläge. Boni werden nach Vertragstagen, Grundgebühren nach Kalendermonatstagen verteilt. Schätzwerte sind gekennzeichnet.</p>
 </main><script src="app.js"></script></body></html>
