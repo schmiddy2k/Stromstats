@@ -23,10 +23,17 @@ def parse_date(value: str, name: str) -> date:
 
 
 def validate_contract(raw: dict) -> dict:
-    required = ("provider", "tariff", "start", "end", "base_monthly", "price_kwh", "contract_kwh")
+    required = ("provider", "tariff", "start", "end", "price_kwh", "contract_kwh")
     for key in required:
         if raw.get(key) is None or str(raw[key]).strip() == "":
             raise ValueError(f"{key}: Pflichtfeld")
+    period = str(raw.get("base_period") or "monthly")
+    if period not in ("monthly", "yearly"):
+        raise ValueError("Grundgebühr: ungültiger Zeitraum")
+    fee_input = raw.get("base_fee", raw.get("base_monthly"))
+    if fee_input is None or str(fee_input).strip() == "":
+        raise ValueError("Grundgebühr: Pflichtfeld")
+    fee = money(fee_input, "Grundgebühr")
     start, end = parse_date(raw["start"], "Beginn"), parse_date(raw["end"], "Ende")
     if end < start:
         raise ValueError("Vertragsende liegt vor Vertragsbeginn")
@@ -35,7 +42,8 @@ def validate_contract(raw: dict) -> dict:
         raise ValueError("Bitte einen gültigen kWh-Sensor wählen")
     result = {key: str(raw[key]).strip() for key in ("provider", "tariff")}
     result.update(start=start.isoformat(), end=end.isoformat(), entity_id=entity)
-    for key in ("base_monthly", "price_kwh", "contract_kwh", "bonus1", "bonus2", "bonus3"):
+    result.update(base_period=period, base_fee=str(fee), base_monthly=str(fee / 12 if period == "yearly" else fee))
+    for key in ("price_kwh", "contract_kwh", "bonus1", "bonus2", "bonus3"):
         value = raw.get(key, 0)
         if key.startswith("bonus") and (value is None or str(value).strip() == ""):
             value = 0
@@ -57,12 +65,27 @@ def months_cost(start: date, end_exclusive: date, monthly: Decimal) -> Decimal:
     return total
 
 
+def base_cost(contract: dict, start: date, end_exclusive: date) -> Decimal:
+    if contract.get("base_period") != "yearly":
+        return months_cost(start, end_exclusive, Decimal(contract["base_monthly"]))
+    annual = Decimal(contract["base_fee"])
+    total = Decimal(0)
+    cursor = start
+    while cursor < end_exclusive:
+        next_year = date(cursor.year + 1, 1, 1)
+        boundary = min(next_year, end_exclusive)
+        year_days = (next_year - date(cursor.year, 1, 1)).days
+        total += annual * Decimal((boundary - cursor).days) / Decimal(year_days)
+        cursor = boundary
+    return total
+
+
 def preview_contract(raw: dict) -> dict:
     """Full-term estimate based on the contracted kWh, before meter data exists."""
     contract = validate_contract({**raw, "provider": "Vorschau", "tariff": "Vorschau"})
     start = date.fromisoformat(contract["start"])
     end = date.fromisoformat(contract["end"]) + timedelta(days=1)
-    base = months_cost(start, end, Decimal(contract["base_monthly"]))
+    base = base_cost(contract, start, end)
     energy = Decimal(contract["contract_kwh"]) * Decimal(contract["price_kwh"])
     bonuses = sum((Decimal(contract[f"bonus{i}"]) for i in (1, 2, 3)), Decimal(0))
     effective = base + energy - bonuses
@@ -88,7 +111,7 @@ def sections(contract: dict, today: date | None = None) -> list[tuple[date, date
 
 
 def calculate(contract: dict, start: date, end: date, kwh: Decimal | None, status: str) -> dict:
-    base = months_cost(start, end, Decimal(contract["base_monthly"]))
+    base = base_cost(contract, start, end)
     energy = kwh * Decimal(contract["price_kwh"]) if kwh is not None else None
     contract_days = (date.fromisoformat(contract["end"]) - date.fromisoformat(contract["start"])).days + 1
     share = Decimal((end - start).days) / Decimal(contract_days)

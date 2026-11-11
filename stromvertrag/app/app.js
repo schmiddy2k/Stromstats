@@ -9,6 +9,7 @@ let readingDraft = {};
 let readingChanges = {};
 let previewTimer;
 let previewSequence = 0;
+let previousBasePeriod = 'yearly';
 
 const euro = (value) => value == null ? '–' : new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR' }).format(value);
 const euroPerKwh = (value) => value == null ? '–' : new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(value) + '/kWh';
@@ -139,9 +140,12 @@ function openEditor(item) {
       const field = form.elements.namedItem(key);
       if (field) field.value = value;
     }
+    form.elements.namedItem('base_period').value = item.base_period || 'monthly';
+    form.elements.namedItem('base_fee').value = item.base_fee ?? item.base_monthly;
     form.elements.namedItem('start_reading').value = item.readings?.[item.start] ?? '';
     form.elements.namedItem('end_reading').value = item.readings?.[dayAfter(item.end)] ?? '';
   }
+  previousBasePeriod = form.elements.namedItem('base_period').value;
   renderReadings();
   form.elements.namedItem('start').onchange = () => {
     if (item && form.elements.namedItem('start').value !== item.start) form.elements.namedItem('start_reading').value = '';
@@ -179,7 +183,7 @@ function schedulePreview() {
   clearTimeout(previewTimer);
   const sequence = ++previewSequence;
   const raw = Object.fromEntries(new FormData(form));
-  if (!raw.start || !raw.end || !raw.base_monthly || !raw.price_kwh || !raw.contract_kwh) {
+  if (!raw.start || !raw.end || !raw.base_fee || !raw.price_kwh || !raw.contract_kwh) {
     $('#preview-content').textContent = 'Laufzeit, Grundgebühr, Arbeitspreis und kWh-Menge eingeben.';
     return;
   }
@@ -226,7 +230,7 @@ function render() {
     facts.append(
       fact('Laufzeit', displayDate(contract.start) + ' – ' + displayDate(contract.end)),
       fact('Vereinbarte Menge', kwh(Number(contract.contract_kwh))),
-      fact('Grundgebühr', euro(Number(contract.base_monthly)) + ' / Monat'),
+      fact('Grundgebühr', euro(Number(contract.base_fee ?? contract.base_monthly)) + (contract.base_period === 'yearly' ? ' / Jahr' : ' / Monat')),
       fact('Arbeitspreis', euroPerKwh(Number(contract.price_kwh))),
     );
     card.append(facts);
@@ -273,14 +277,16 @@ function render() {
       paragraph.append(node('strong', label), node('span', value, 'summary-value'));
       summary.append(paragraph);
     }
+    const settlement = node('p', '', 'settlement');
     if (paid != null && hasTotal) {
       const difference = Math.round((total - paid) * 100) / 100;
       const label = difference > 0 ? 'Nachzahlung' : difference < 0 ? 'Guthaben' : 'Ausgeglichen';
       const prefix = finished && complete && !estimated ? '' : 'Vorläufig: ';
-      const settlement = node('p', '', 'settlement');
       settlement.append(node('strong', prefix + label), node('span', euro(Math.abs(difference)), 'summary-value'));
-      summary.append(settlement);
+    } else {
+      settlement.append(node('strong', 'Nachzahlung / Guthaben'), node('span', '–', 'summary-value'));
     }
+    summary.append(settlement);
     if (paid == null) summary.append(node('span', 'Für Nachzahlung oder Guthaben die gezahlten Abschläge im Vertrag ergänzen.', 'summary-note'));
     if (!complete || estimated) summary.append(node('span', [!complete ? 'Messdaten lückenhaft' : '', estimated ? 'Jahresanteile geschätzt' : ''].filter(Boolean).join(' · '), 'summary-note'));
     card.append(summary);
@@ -305,6 +311,16 @@ $('#reading-add').onclick = () => {
 };
 $('#new').onclick = () => openEditor(null);
 $('#cancel').onclick = () => { $('#editor').classList.add('hidden'); ++previewSequence; clearTimeout(previewTimer); };
+form.elements.namedItem('base_period').addEventListener('change', (event) => {
+  const input = form.elements.namedItem('base_fee');
+  const next = event.target.value;
+  if (next === previousBasePeriod) return;
+  if (input.value !== '') {
+    const converted = Number(input.value) * (next === 'yearly' ? 12 : 1 / 12);
+    input.value = Number(converted.toFixed(next === 'yearly' ? 2 : 6)).toString();
+  }
+  previousBasePeriod = next;
+});
 form.addEventListener('input', schedulePreview);
 form.addEventListener('change', schedulePreview);
 form.onsubmit = async (event) => {

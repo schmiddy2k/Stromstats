@@ -5,7 +5,7 @@ from decimal import Decimal
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
-from model import calculate, consumption, fill_from_contract_readings, months_cost, preview_contract, sections, validate_contract
+from model import base_cost, calculate, consumption, fill_from_contract_readings, months_cost, preview_contract, sections, validate_contract
 
 
 RAW = {"provider": "Beispiel", "tariff": "Fix", "start": "2025-07-01", "end": "2026-06-30", "base_monthly": "12", "price_kwh": "0.3", "contract_kwh": "3000", "bonus1": "120", "bonus2": "0", "bonus3": "0", "entity_id": "sensor.strom_kwh"}
@@ -23,6 +23,15 @@ class ModelTest(unittest.TestCase):
 
     def test_partial_month_leap_year(self):
         self.assertEqual(months_cost(date(2024, 2, 15), date(2024, 3, 1), Decimal(29)), Decimal(15))
+
+    def test_annual_base_fee_and_legacy_monthly_fee(self):
+        annual = validate_contract({**RAW, "start": "2024-01-01", "end": "2024-12-31", "base_fee": "120", "base_period": "yearly"})
+        self.assertEqual(annual["base_fee"], "120")
+        self.assertEqual(base_cost(annual, date(2024, 1, 1), date(2025, 1, 1)), Decimal(120))
+        self.assertEqual(base_cost(annual, date(2024, 2, 1), date(2024, 3, 1)), Decimal(120) * Decimal(29) / Decimal(366))
+        self.assertEqual(preview_contract({**RAW, "start": "2024-01-01", "end": "2024-12-31", "base_fee": "120", "base_period": "yearly"})["base"], 120.0)
+        legacy = validate_contract(RAW)
+        self.assertEqual((legacy["base_period"], legacy["base_fee"]), ("monthly", "12"))
 
     def test_live_preview_uses_full_term_and_contract_kwh(self):
         preview = preview_contract({**RAW, "start": "2025-01-01", "end": "2025-12-31", "base_monthly": "10", "price_kwh": "0.30", "contract_kwh": "1000", "bonus1": "50", "bonus2": "25", "bonus3": "0"})

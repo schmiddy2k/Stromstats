@@ -12,13 +12,15 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--primary-background-color, var(--app-background)); color: var(--primary-text-color, var(--app-text)); }
+.app-bar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; padding: 0 24px; background: var(--app-header-background-color, var(--primary-color, #03a9f4)); color: var(--text-primary-color, #fff); box-shadow: 0 2px 4px #0002; }
+.app-bar h1 { margin: 0; font-size: 1.25rem; font-weight: 500; }
+.app-bar button { background: transparent; color: inherit; }
+.app-bar button:hover { background: #ffffff20; filter: none; }
 main { max-width: 1120px; margin: auto; padding: 24px; }
-h1 { font-size: 1.5rem; font-weight: 500; margin: 0 0 4px; }
 h2 { font-size: 1.15rem; font-weight: 500; }
 p { line-height: 1.45; }
 .muted, .hint { color: var(--secondary-text-color, var(--app-secondary)); }
 .hint { font-size: .875rem; margin: 4px 0 0; }
-.top { display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid var(--divider-color, var(--app-divider)); padding-bottom: 16px; }
 button { font: inherit; font-weight: 500; border: 0; border-radius: 4px; padding: 9px 14px; cursor: pointer; background: var(--primary-color, #03a9f4); color: var(--text-primary-color, #fff); min-height: 38px; }
 button:hover { filter: brightness(.95); }
 button.secondary { background: transparent; color: var(--primary-color, #03a9f4); }
@@ -36,11 +38,11 @@ fieldset { border: 1px solid var(--divider-color, var(--app-divider)); border-ra
 legend { font-weight: 500; padding: 0 6px; }
 .boundary-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 12px; }
 .hidden { display: none; }
-.summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; padding: 16px; border-radius: 8px; background: #eaf6fc; background: color-mix(in srgb, var(--primary-color, #03a9f4) 10%, var(--ha-card-background, var(--app-card))); }
+.summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 16px; padding: 16px; border-radius: 8px; background: #eaf6fc; background: color-mix(in srgb, var(--primary-color, #03a9f4) 10%, var(--ha-card-background, var(--app-card))); }
 .summary p { margin: 0; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .summary strong { font-size: .79rem; font-weight: 700; }
-.summary .summary-value { font-size: 1.14rem; font-weight: 600; overflow-wrap: anywhere; }
-.summary .settlement { grid-column: 1 / -1; border-top: 1px solid var(--divider-color, var(--app-divider)); padding-top: 12px; }
+.summary .summary-value { font-size: 1.04rem; font-weight: 600; overflow-wrap: anywhere; }
+.summary .settlement { border-left: 1px solid var(--divider-color, var(--app-divider)); padding-left: 12px; }
 .summary .settlement .summary-value { color: var(--primary-text-color, var(--app-text)); }
 .summary-note { grid-column: 1 / -1; color: var(--secondary-text-color, var(--app-secondary)); font-size: .78rem; }
 .tablewrap { overflow: auto; margin-top: 18px; border: 1px solid var(--divider-color, var(--app-divider)); border-radius: 8px; }
@@ -90,16 +92,16 @@ tr:last-child td { border-bottom: 0; }
   :root { color-scheme: dark; --app-background: #111; --app-card: #1c1c1c; --app-text: #eee; --app-secondary: #aaa; --app-divider: #444; }
   #notice { background: #533f03; color: #fff3cd; }
 }
-@media (max-width: 760px) { form { grid-template-columns: repeat(2, minmax(0, 1fr)); } main { padding: 16px; } .contract-facts, .preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { form { grid-template-columns: repeat(2, minmax(0, 1fr)); } main { padding: 16px; } .app-bar { padding: 0 16px; } .contract-facts, .preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .summary .settlement { border: 0; padding-left: 0; } }
 @media (max-width: 460px) { form { grid-template-columns: 1fr; } form .wide { grid-column: span 1; } .boundary-fields, .preview-grid { grid-template-columns: 1fr; } .summary { grid-template-columns: 1fr; } }
-</style></head><body><main>
-<div class="top"><div><h1>Stromverträge</h1><p class="muted">Verbrauch und Kosten nach Vertrag und Jahr</p></div><button id="new">Vertrag hinzufügen</button></div>
+</style></head><body><header class="app-bar"><h1>Stromverträge</h1><button id="new" type="button">＋ Vertrag hinzufügen</button></header><main>
 <div id="notice" class="hidden"></div>
 <section id="editor" class="card hidden"><h2 id="editor-title">Vertrag anlegen</h2><form id="form">
 <label class="wide">Anbieter<input name="provider" required></label><label class="wide">Tarif<input name="tariff" required></label>
 <label>Beginn<input name="start" type="date" required></label><label>Ende<input name="end" type="date" required></label>
 <label class="wide">Verbrauchssensor<select name="entity_id"><option value="">Kein Sensor – manuelle Ablesungen</option></select></label>
-<label>Grundgebühr €/Monat<input name="base_monthly" type="number" min="0" step="0.01" required></label>
+<label>Grundgebühr €<input name="base_fee" type="number" min="0" step="any" required></label>
+<label>Zeitraum der Grundgebühr<select name="base_period"><option value="yearly">Pro Jahr</option><option value="monthly">Pro Monat</option></select></label>
 <label>Arbeitspreis €/kWh<input name="price_kwh" type="number" min="0" step="0.0001" required></label>
 <label>Abschlussmenge kWh<input name="contract_kwh" type="number" min="0" step="1" required></label>
 <label>Bonus 1 €<input name="bonus1" type="number" min="0" step="0.01" value="0"></label>
@@ -112,5 +114,5 @@ tr:last-child td { border-bottom: 0; }
 <div id="reading-editor" class="hidden"><h3>Weitere Ablesungen</h3><p class="hint">Für genaue Jahreswerte eine Ablesung zum 1. Januar eintragen. Änderungen werden zusammen mit dem Vertrag gespeichert.</p><div class="reading"><label>Ablesedatum<input id="reading-date" type="date"></label><label>Zählerstand (kWh)<input id="reading-value" type="number" min="0" step="0.001"></label><button type="button" id="reading-add" class="secondary">Ablesung übernehmen</button></div><ul id="reading-list" class="reading-list"></ul></div>
 </section>
 <div id="contracts"></div>
-<p class="hint">Brutto = Grundgebühr + Verbrauch × Arbeitspreis. Effektiv = Brutto − anteilige Boni. Nachzahlung oder Guthaben = effektive Kosten − gezahlte Abschläge. Boni werden nach Vertragstagen, Grundgebühren nach Kalendermonatstagen verteilt. Schätzwerte sind gekennzeichnet.</p>
+<p class="hint">Brutto = Grundgebühr + Verbrauch × Arbeitspreis. Effektiv = Brutto − anteilige Boni. Nachzahlung oder Guthaben = effektive Kosten − gezahlte Abschläge. Boni werden nach Vertragstagen verteilt; jährliche Grundgebühren nach Kalendertagen im Jahr, monatliche nach Kalendertagen im Monat. Schätzwerte sind gekennzeichnet.</p>
 </main><script src="app.js"></script></body></html>
