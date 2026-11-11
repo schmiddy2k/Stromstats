@@ -234,13 +234,25 @@ function render() {
     const tableWrap = node('div', '', 'tablewrap');
     const table = node('table');
     const header = node('tr');
-    for (const label of ['Jahr / Zeitraum', 'Verbrauch', 'Grundgebühr', 'Arbeitspreis', 'Brutto', 'Bonus', 'Effektiv', 'Datenlage']) header.append(node('th', label));
+    for (const [label, explanation] of [
+      ['Jahr', 'Vertragszeitraum im Kalenderjahr'], ['Verbrauch', 'Gemessener oder ergänzter Verbrauch'],
+      ['Grundpreis', 'Anteilig berechnete Grundgebühr'], ['Arbeit', 'Verbrauchskosten zum Arbeitspreis'],
+      ['Brutto', 'Grundpreis plus Verbrauchskosten'], ['Bonus', 'Anteilig zugeordnete Boni'],
+      ['Effektiv', 'Brutto abzüglich Boni'], ['Datenlage', 'Herkunft der Verbrauchsdaten'],
+    ]) {
+      const cell = node('th', label);
+      cell.title = explanation;
+      header.append(cell);
+    }
     const thead = node('thead'); thead.append(header); table.append(thead);
     const tbody = node('tbody');
     let total = 0, totalKwh = 0, hasTotal = false, complete = true, estimated = false;
     for (const year of contract.years) {
       const row = node('tr');
-      for (const value of [String(year.year) + ' · ' + displayDate(year.from) + ' – ' + displayDate(year.to), kwh(year.kwh), euro(year.base), euro(year.energy), euro(year.gross), euro(year.bonus), euro(year.net)]) row.append(node('td', value));
+      const period = node('td', '', 'period-cell');
+      period.append(node('strong', String(year.year)), node('small', displayDate(year.from) + ' – ' + displayDate(year.to)));
+      row.append(period);
+      for (const value of [kwh(year.kwh), euro(year.base), euro(year.energy), euro(year.gross), euro(year.bonus), euro(year.net)]) row.append(node('td', value));
       const statusCell = node('td'); statusCell.append(statusIcon(year.status)); row.append(statusCell);
       tbody.append(row);
       if (year.net != null) { total += year.net; totalKwh += year.kwh; hasTotal = true; }
@@ -249,16 +261,17 @@ function render() {
     }
     table.append(tbody); tableWrap.append(table); card.append(tableWrap);
 
-    const suffix = (complete ? '' : ' (lückenhaft)') + (estimated ? ' (Jahresanteile geschätzt)' : '');
     const summary = node('div', '', 'summary');
     for (const [label, value] of [
       [finished ? 'Verbrauch gesamt' : 'Verbrauch bisher', hasTotal ? kwh(totalKwh) : '–'],
       [finished ? 'Effektive Gesamtkosten' : 'Effektive Kosten bisher', hasTotal ? euro(total) : '–'],
+      ['Effektive Kosten je kWh', hasTotal && totalKwh > 0 ? euroPerKwh(total / totalKwh) : '–'],
     ]) {
       const paragraph = node('p');
-      paragraph.append(node('strong', label), node('span', value + suffix, 'summary-value'));
+      paragraph.append(node('strong', label), node('span', value, 'summary-value'));
       summary.append(paragraph);
     }
+    if (!complete || estimated) summary.append(node('span', [!complete ? 'Messdaten lückenhaft' : '', estimated ? 'Jahresanteile geschätzt' : ''].filter(Boolean).join(' · '), 'summary-note'));
     card.append(summary);
     if (!contract.years.length) card.append(node('p', 'Dieser Vertrag beginnt in der Zukunft.', 'muted'));
     box.append(card);

@@ -15,13 +15,15 @@ Das Verzeichnis `stromvertrag` als lokales Add-on unter `/addons/stromvertrag` i
 
 Im Vertragsformular zeigt **Voraussichtliche Vertragskosten** laufend die Gesamtkosten auf Basis der vereinbarten kWh-Menge und der eingetragenen Preise und Boni. Das ist eine Planung; die Ist-Kosten in der Übersicht verwenden Messdaten oder manuelle Zählerstände. Die Vertragsübersicht zeigt die neuesten Vertragsbeginne zuerst. Bei abgeschlossenen Verträgen heißen die Summen „Verbrauch gesamt“ und „Effektive Gesamtkosten“. Die Icons in „Datenlage“ zeigen ihren genauen Status als Tooltip und für Screenreader an.
 
+Die Jahreswerte stehen in einer kompakten Tabelle. Darunter zeigt ein hervorgehobener Summenbereich Verbrauch, effektive Kosten und die **effektiven Kosten je ausgewerteter kWh** (effektive Kosten geteilt durch Verbrauch). Bei Lücken oder geschätzten Jahresanteilen steht dort ein entsprechender Hinweis.
+
 Die Jahresauswertung verwendet stündliche `change`-Werte aus der Recorder-Langzeitstatistik. Fehlen Stunden, erscheint **Statistik (unvollständig)**. Fehlen alle Messwerte, bleiben Verbrauch und verbrauchsabhängige Kosten leer. Manuelle Ablesungen müssen in derselben Einheit (kWh) und vom selben Zähler stammen.
 
 Die Grundgebühr wird je angefangenem Kalendermonat nach tatsächlichen Tagen aufgeteilt. Boni werden linear nach Vertragstagen aufgeteilt; dies ist eine rechnerische Zuordnung, nicht der tatsächliche Auszahlungszeitpunkt. **Brutto** ist Grundgebühr plus Verbrauchskosten, **Effektiv** zieht die zugeordneten Boni ab. Die Abschlussmenge dient als Vertragsinformation und wird nicht als gemessener Verbrauch ausgegeben.
 
 ## Update und Datenerhalt
 
-Version `0.4.0` verwendet dieselbe Datenbank und dieselben Tabellen wie die Vorversionen. Alte Verträge und Ablesungen bleiben erhalten. Alle Ablesungen werden im Bearbeitungsbereich geändert. Leere Grenzstandfelder löschen nur einen zuvor eingetragenen Grenzstand an genau diesem Datum; andere Ablesungen bleiben bestehen. Vor dem Update empfiehlt sich ein Home-Assistant-Backup des Add-ons. Das Add-on wird für ein konsistentes Backup kurz angehalten (`backup: cold`).
+Version `0.5.0` verwendet dieselbe Datenbank und dieselben Tabellen wie die Vorversionen. Alte Verträge und Ablesungen bleiben erhalten. Alle Ablesungen werden im Bearbeitungsbereich geändert. Leere Grenzstandfelder löschen nur einen zuvor eingetragenen Grenzstand an genau diesem Datum; andere Ablesungen bleiben bestehen. Vor dem Update empfiehlt sich ein Home-Assistant-Backup des Add-ons. Das Add-on wird für ein konsistentes Backup kurz angehalten (`backup: cold`).
 
 Verträge werden nach Vertragsbeginn (neueste zuerst) angezeigt. Die Datumsanzeige nutzt die Sprache der Home-Assistant-Systemkonfiguration, z. B. `de` für `31.12.2025`. Die Eingabefelder für Daten sind native Browser-Datumsfelder; deren Kalenderdarstellung kann zusätzlich von der Browser- oder Gerätesprache abhängen.
 
