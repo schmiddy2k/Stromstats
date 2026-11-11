@@ -175,8 +175,10 @@ function yearConsumptionInfo(status) {
 }
 
 function compactMetric(label, value) {
-  const wrapper = node('span');
-  wrapper.append(node('strong', label + ': '), value);
+  const wrapper = node('div', '', 'compact-metric');
+  const display = typeof value === 'string' ? node('span', value) : value;
+  display.classList.add('compact-value');
+  wrapper.append(node('span', label, 'compact-label'), display);
   return wrapper;
 }
 
@@ -327,8 +329,8 @@ function render() {
       const details = node('div', '', 'collapsed-details');
       details.append(
         compactMetric('Verbrauch', consumptionValue(hasTotal ? totalKwh : null, consumptionStatus, consumptionDescription)),
-        compactMetric('Eff. Kosten', node('span', hasTotal ? euro(total) : '–')),
-        compactMetric('Eff. kWh', node('span', hasTotal && totalKwh > 0 ? euroPerKwh(total / totalKwh) : '–')),
+        compactMetric('Effektive Kosten', hasTotal ? euro(total) : '–'),
+        compactMetric('Effektiv je kWh', hasTotal && totalKwh > 0 ? euroPerKwh(total / totalKwh) : '–'),
       );
       heading.append(details);
       box.append(card);
@@ -370,7 +372,14 @@ function render() {
       for (const value of [euro(year.base), euro(year.energy), euro(year.gross), euro(year.bonus), euro(year.net)]) row.append(node('td', value));
       tbody.append(row);
     }
-    table.append(tbody); tableWrap.append(table); card.append(tableWrap);
+    table.append(tbody); tableWrap.append(table);
+    if (contract.years.length) {
+      const yearDetails = node('details', '', 'year-details');
+      const trigger = node('summary', '', 'year-details-toggle');
+      trigger.append(node('span', 'Jahresübersicht'), node('span', contract.years.length + (contract.years.length === 1 ? ' Jahr' : ' Jahre'), 'year-count'), icon('expand'));
+      yearDetails.append(trigger, tableWrap);
+      card.append(yearDetails);
+    }
 
     const summary = node('div', '', 'summary');
     const paid = contract.paid_installments == null || contract.paid_installments === '' ? null : Number(contract.paid_installments);
@@ -403,6 +412,12 @@ function render() {
 }
 
 $('#reading-date').onchange = () => { $('#reading-value').value = readingDraft[$('#reading-date').value] ?? ''; };
+$('#reading-editor').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' && event.target.matches('input')) {
+    event.preventDefault();
+    $('#reading-add').click();
+  }
+});
 $('#reading-add').onclick = () => {
   const day = $('#reading-date').value;
   const value = $('#reading-value').value;
@@ -428,8 +443,8 @@ form.elements.namedItem('base_period').addEventListener('change', (event) => {
   }
   previousBasePeriod = next;
 });
-form.addEventListener('input', schedulePreview);
-form.addEventListener('change', schedulePreview);
+form.addEventListener('input', (event) => { if (!event.target.closest('#reading-editor')) schedulePreview(); });
+form.addEventListener('change', (event) => { if (!event.target.closest('#reading-editor')) schedulePreview(); });
 form.onsubmit = async (event) => {
   event.preventDefault();
   try {

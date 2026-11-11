@@ -27,16 +27,20 @@ button.secondary { background: transparent; color: var(--primary-color, #03a9f4)
 button.danger { background: transparent; color: var(--error-color, #db4437); }
 button:disabled { opacity: .5; }
 .card { background: var(--ha-card-background, var(--card-background-color, var(--app-card))); border: 1px solid var(--divider-color, var(--app-divider)); border-radius: var(--ha-card-border-radius, 12px); padding: 20px; margin: 16px 0; box-shadow: var(--ha-card-box-shadow, 0 1px 2px #00000012); }
-form { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
-label { display: flex; flex-direction: column; gap: 6px; font-size: .875rem; }
+form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+label { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: .875rem; font-weight: 500; }
 input, select { font: inherit; border: 1px solid var(--divider-color, var(--app-divider)); border-radius: 4px; padding: 9px 10px; background: var(--input-fill-color, var(--card-background-color, var(--app-card))); color: var(--primary-text-color, var(--app-text)); min-width: 0; height: 40px; }
 input:focus, select:focus { outline: 2px solid var(--accent-color, var(--primary-color, #03a9f4)); outline-offset: 1px; }
 form .wide { grid-column: span 2; }
-form .actions, fieldset { grid-column: 1 / -1; }
-.actions { display: flex; gap: 8px; flex-wrap: wrap; }
-fieldset { border: 1px solid var(--divider-color, var(--app-divider)); border-radius: 8px; padding: 14px 16px; margin: 0; }
-legend { font-weight: 500; padding: 0 6px; }
-.boundary-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 12px; }
+.editor { padding: 24px; }
+.editor h2 { margin: 0 0 20px; font-size: 1.2rem; font-weight: 600; }
+.form-section { min-width: 0; border: 1px solid var(--divider-color, var(--app-divider)); border-radius: 8px; padding: 18px; margin: 0; }
+legend { font-size: 1rem; font-weight: 600; padding: 0 8px; }
+.form-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.form-section .hint { margin: 0 0 14px; }
+.form-section .form-grid + .hint { margin: 12px 0 0; }
+.actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; padding-top: 4px; }
+.reading-editor h3 { margin: 0 0 6px; font-size: 1rem; }
 .hidden { display: none; }
 .summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 16px; padding: 16px; border-radius: 8px; background: var(--secondary-background-color, var(--app-background)); background: color-mix(in srgb, var(--accent-color, var(--primary-color, #03a9f4)) 10%, var(--ha-card-background, var(--app-card))); }
 .summary p { margin: 0; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
@@ -44,7 +48,15 @@ legend { font-weight: 500; padding: 0 6px; }
 .summary .summary-value { font-size: 1.04rem; font-weight: 600; overflow-wrap: anywhere; }
 .summary .settlement { border-left: 2px solid var(--accent-color, var(--primary-color, #03a9f4)); padding-left: 12px; }
 .summary .settlement .summary-value { color: var(--primary-text-color, var(--app-text)); }
-.tablewrap { overflow: auto; margin-top: 18px; border: 1px solid var(--divider-color, var(--app-divider)); border-radius: 8px; }
+.year-details { margin-top: 16px; border: 1px solid var(--divider-color, var(--app-divider)); border-radius: 8px; }
+.year-details-toggle { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 9px 14px; cursor: pointer; list-style: none; font-size: .875rem; font-weight: 600; }
+.year-details-toggle::-webkit-details-marker { display: none; }
+.year-details-toggle:hover { background: var(--secondary-background-color, var(--app-background)); }
+.year-details-toggle .year-count { margin-left: auto; font-size: .78rem; font-weight: 400; color: var(--secondary-text-color, var(--app-secondary)); }
+.year-details-toggle svg { width: 20px; height: 20px; fill: currentColor; color: var(--secondary-text-color, var(--app-secondary)); transition: transform .15s ease; }
+.year-details[open] .year-details-toggle svg { transform: rotate(180deg); }
+.year-details[open] .year-details-toggle { border-bottom: 1px solid var(--divider-color, var(--app-divider)); }
+.tablewrap { overflow: auto; }
 table { border-collapse: collapse; width: 100%; white-space: nowrap; font-size: .84rem; }
 thead { background: var(--secondary-background-color, var(--app-background)); }
 th, td { padding: 8px 9px; text-align: right; border-bottom: 1px solid var(--divider-color, var(--app-divider)); }
@@ -54,19 +66,22 @@ tr:last-child td { border-bottom: 0; }
 .period-cell { line-height: 1.2; }
 .period-cell strong { display: block; font-size: .88rem; }
 .period-cell small { display: block; color: var(--secondary-text-color, var(--app-secondary)); font-size: .72rem; margin-top: 3px; }
-.reading { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; margin-top: 16px; padding-top: 8px; }
+.reading { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; margin-top: 8px; }
 .reading label { min-width: 160px; }
 .reading-list { list-style: none; padding: 0; margin: 12px 0 0; }
 .reading-list li { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--divider-color, var(--app-divider)); padding: 5px 0; }
 .reading-list li span { flex: 1; }
 #notice { padding: 12px; border-radius: 4px; background: #fff3cd; color: #533f03; margin: 16px 0; }
 .contract-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; flex-wrap: wrap; }
+.contract-head > div:first-child { flex: 1; min-width: 0; }
 .contract-head h2 { margin: 0; font-weight: 700; }
 .contract-head p { margin: 4px 0 0; }
 .contract-actions { display: flex; gap: 4px; }
-.collapsed-details { display: flex; gap: 12px 20px; flex-wrap: wrap; margin-top: 12px; }
-.collapsed-details span { white-space: nowrap; }
-.collapsed-details strong { font-size: .78rem; color: var(--secondary-text-color, var(--app-secondary)); }
+.collapsed-details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 20px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--divider-color, var(--app-divider)); }
+.compact-metric { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.compact-label { color: var(--secondary-text-color, var(--app-secondary)); font-size: .76rem; font-weight: 500; line-height: 1.25; }
+.compact-value { display: inline-flex; align-items: center; min-height: 28px; font-size: 1rem; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.compact-value .consumption-value { font: inherit; }
 .contract-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .contract-state { color: var(--secondary-text-color, var(--app-secondary)); background: var(--secondary-background-color, var(--app-background)); border: 1px solid var(--divider-color, var(--app-divider)); border-radius: 20px; padding: 3px 9px; font-size: .75rem; }
 .contract-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin: 16px 0 0; border-top: 1px solid var(--divider-color, var(--app-divider)); border-bottom: 1px solid var(--divider-color, var(--app-divider)); }
@@ -88,7 +103,7 @@ tr:last-child td { border-bottom: 0; }
 .consumption-info-text { position: absolute; z-index: 3; left: 0; top: 30px; width: min(280px, 75vw); padding: 10px 12px; border-radius: 6px; background: var(--ha-card-background, var(--card-background-color, var(--app-card))); color: var(--primary-text-color, var(--app-text)); border: 1px solid var(--divider-color, var(--app-divider)); box-shadow: 0 4px 16px #0003; white-space: normal; text-align: left; line-height: 1.4; font-size: .82rem; }
 .tablewrap:has(.consumption-info[open]) { overflow: visible; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
-.preview { grid-column: 1 / -1; border: 1px solid var(--divider-color, var(--app-divider)); border-radius: 8px; padding: 16px; }
+.preview { border: 1px solid var(--divider-color, var(--app-divider)); border-radius: 8px; padding: 18px; background: var(--secondary-background-color, var(--app-background)); }
 .preview h3 { font-size: 1rem; font-weight: 600; margin: 0 0 4px; }
 .preview-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 14px 0 0; font-size: 1rem; color: var(--primary-text-color, var(--app-text)); }
 .preview-grid div { min-width: 0; }
@@ -100,26 +115,33 @@ tr:last-child td { border-bottom: 0; }
   :root { color-scheme: dark; --app-background: #111; --app-card: #1c1c1c; --app-text: #eee; --app-secondary: #aaa; --app-divider: #444; }
   #notice { background: #533f03; color: #fff3cd; }
 }
-@media (max-width: 760px) { form { grid-template-columns: repeat(2, minmax(0, 1fr)); } main { padding: 16px; } .app-bar { padding: 0 16px; } .contract-facts, .preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .summary .settlement { border: 0; padding-left: 0; } }
-@media (max-width: 460px) { form { grid-template-columns: 1fr; } form .wide { grid-column: span 1; } .boundary-fields, .preview-grid { grid-template-columns: 1fr; } .summary { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } main { padding: 16px; } .app-bar { padding: 0 16px; } .contract-facts, .preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .summary .settlement { border: 0; padding-left: 0; } }
+@media (max-width: 460px) { .editor { padding: 16px; } .form-section { padding: 14px; } .form-grid { grid-template-columns: 1fr; } form .wide { grid-column: span 1; } .preview-grid { grid-template-columns: 1fr; } .summary { grid-template-columns: 1fr; } .collapsed-details { grid-template-columns: 1fr; } }
 </style></head><body><header class="app-bar"><h1>Stromverträge</h1><button id="new" type="button">＋ Vertrag hinzufügen</button></header><main>
 <div id="notice" class="hidden"></div>
-<section id="editor" class="card hidden"><h2 id="editor-title">Vertrag anlegen</h2><form id="form">
+<section id="editor" class="card editor hidden"><h2 id="editor-title">Vertrag anlegen</h2><form id="form">
+<fieldset class="form-section"><legend>Vertragsdaten</legend><div class="form-grid">
 <label class="wide">Anbieter<input name="provider" required></label><label class="wide">Tarif<input name="tariff" required></label>
 <label>Beginn<input name="start" type="date" required></label><label>Ende<input name="end" type="date" required></label>
-<label class="wide">Verbrauchssensor<select name="entity_id"><option value="">Kein Sensor – manuelle Ablesungen</option></select></label>
+<label>Abschlussmenge kWh<input name="contract_kwh" type="number" min="0" step="1" required></label>
+</div></fieldset>
+<fieldset class="form-section"><legend>Preise und Zahlungen</legend><div class="form-grid">
 <label>Grundgebühr €<input name="base_fee" type="number" min="0" step="any" required></label>
 <label>Zeitraum der Grundgebühr<select name="base_period"><option value="yearly">Pro Jahr</option><option value="monthly">Pro Monat</option></select></label>
 <label>Arbeitspreis €/kWh<input name="price_kwh" type="number" min="0" step="0.0001" required></label>
-<label>Abschlussmenge kWh<input name="contract_kwh" type="number" min="0" step="1" required></label>
 <label>Bonus 1 €<input name="bonus1" type="number" min="0" step="0.01" value="0"></label>
 <label>Bonus 2 €<input name="bonus2" type="number" min="0" step="0.01" value="0"></label>
 <label>Bonus 3 €<input name="bonus3" type="number" min="0" step="0.01" value="0"></label>
 <label class="wide">Gezahlte Abschläge gesamt €<input name="paid_installments" type="number" min="0" step="0.01" placeholder="Optional"></label>
+</div></fieldset>
 <section class="preview" aria-live="polite"><h3>Voraussichtliche Vertragskosten</h3><p class="hint">Berechnet mit der vereinbarten kWh-Menge über die gesamte Laufzeit. Die tatsächlichen Kosten stehen in der Vertragsübersicht.</p><div id="preview-content" class="hint">Laufzeit, Grundgebühr, Arbeitspreis und kWh-Menge eingeben.</div></section>
-<fieldset><legend>Manuelle Zählerstände</legend><p class="hint">Optional für abgeschlossene Verträge ohne vollständige Sensordaten. Bitte den Zählerstand am Vertragsbeginn und am Tag nach Vertragsende in kWh eintragen.</p><div class="boundary-fields"><label>Stand bei Vertragsbeginn (kWh)<input name="start_reading" type="number" min="0" step="0.001" placeholder="Optional"></label><label>Stand nach Vertragsende (kWh)<input name="end_reading" type="number" min="0" step="0.001" placeholder="Optional"></label></div></fieldset>
-<div class="actions"><button type="submit">Speichern</button><button type="button" class="secondary" id="cancel">Abbrechen</button></div></form>
-<div id="reading-editor" class="hidden"><h3>Weitere Ablesungen</h3><p class="hint">Für genaue Jahreswerte eine Ablesung zum 1. Januar eintragen. Änderungen werden zusammen mit dem Vertrag gespeichert.</p><div class="reading"><label>Ablesedatum<input id="reading-date" type="date"></label><label>Zählerstand (kWh)<input id="reading-value" type="number" min="0" step="0.001"></label><button type="button" id="reading-add" class="secondary">Ablesung übernehmen</button></div><ul id="reading-list" class="reading-list"></ul></div>
-</section>
+<fieldset class="form-section"><legend>Verbrauchsdaten</legend><p class="hint">Optional einen Sensor auswählen oder für abgeschlossene Verträge Zählerstände ergänzen.</p><div class="form-grid">
+<label class="wide">Verbrauchssensor<select name="entity_id"><option value="">Kein Sensor – manuelle Ablesungen</option></select></label>
+<label class="wide">Stand bei Vertragsbeginn (kWh)<input name="start_reading" type="number" min="0" step="0.001" placeholder="Optional"></label>
+<label class="wide">Stand nach Vertragsende (kWh)<input name="end_reading" type="number" min="0" step="0.001" placeholder="Optional"></label>
+</div><p class="hint">Der Endstand gilt für den Tag nach Vertragsende.</p></fieldset>
+<section id="reading-editor" class="form-section reading-editor hidden"><h3>Weitere Ablesungen</h3><p class="hint">Für genaue Jahreswerte eine Ablesung zum 1. Januar eintragen. Änderungen werden zusammen mit dem Vertrag gespeichert.</p><div class="reading"><label>Ablesedatum<input id="reading-date" type="date"></label><label>Zählerstand (kWh)<input id="reading-value" type="number" min="0" step="0.001"></label><button type="button" id="reading-add" class="secondary">Ablesung übernehmen</button></div><ul id="reading-list" class="reading-list"></ul></section>
+<div class="actions"><button type="button" class="secondary" id="cancel">Abbrechen</button><button type="submit">Speichern</button></div>
+</form></section>
 <div id="contracts"></div>
 </main><script src="app.js"></script></body></html>
