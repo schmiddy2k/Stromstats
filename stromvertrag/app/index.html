@@ -44,13 +44,11 @@ legend { font-weight: 500; padding: 0 6px; }
 .summary .summary-value { font-size: 1.04rem; font-weight: 600; overflow-wrap: anywhere; }
 .summary .settlement { border-left: 2px solid var(--accent-color, var(--primary-color, #03a9f4)); padding-left: 12px; }
 .summary .settlement .summary-value { color: var(--primary-text-color, var(--app-text)); }
-.summary-note { grid-column: 1 / -1; color: var(--secondary-text-color, var(--app-secondary)); font-size: .78rem; }
 .tablewrap { overflow: auto; margin-top: 18px; border: 1px solid var(--divider-color, var(--app-divider)); border-radius: 8px; }
 table { border-collapse: collapse; width: 100%; white-space: nowrap; font-size: .84rem; }
 thead { background: var(--secondary-background-color, var(--app-background)); }
 th, td { padding: 8px 9px; text-align: right; border-bottom: 1px solid var(--divider-color, var(--app-divider)); }
 th:first-child, td:first-child { text-align: left; }
-th:last-child, td:last-child { text-align: center; }
 th { font-size: .73rem; font-weight: 600; color: var(--secondary-text-color, var(--app-secondary)); }
 tr:last-child td { border-bottom: 0; }
 .period-cell { line-height: 1.2; }
@@ -66,6 +64,9 @@ tr:last-child td { border-bottom: 0; }
 .contract-head h2 { margin: 0; font-weight: 700; }
 .contract-head p { margin: 4px 0 0; }
 .contract-actions { display: flex; gap: 4px; }
+.collapsed-details { display: flex; gap: 12px 20px; flex-wrap: wrap; margin-top: 12px; }
+.collapsed-details span { white-space: nowrap; }
+.collapsed-details strong { font-size: .78rem; color: var(--secondary-text-color, var(--app-secondary)); }
 .contract-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .contract-state { color: var(--secondary-text-color, var(--app-secondary)); background: var(--secondary-background-color, var(--app-background)); border: 1px solid var(--divider-color, var(--app-divider)); border-radius: 20px; padding: 3px 9px; font-size: .75rem; }
 .contract-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin: 16px 0 0; border-top: 1px solid var(--divider-color, var(--app-divider)); border-bottom: 1px solid var(--divider-color, var(--app-divider)); }
@@ -79,6 +80,13 @@ tr:last-child td { border-bottom: 0; }
 .status-indicator.statistics { color: var(--primary-color, #03a9f4); }
 .status-indicator.estimated, .status-indicator.partial { color: var(--warning-color, #e59a17); }
 .status-indicator.missing { color: var(--error-color, #db4437); }
+.consumption-value { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+.consumption-info { display: inline-block; position: relative; vertical-align: middle; }
+.consumption-info summary { list-style: none; cursor: pointer; }
+.consumption-info summary::-webkit-details-marker { display: none; }
+.consumption-info .status-indicator { pointer-events: none; }
+.consumption-info-text { position: absolute; z-index: 3; left: 0; top: 30px; width: min(280px, 75vw); padding: 10px 12px; border-radius: 6px; background: var(--ha-card-background, var(--card-background-color, var(--app-card))); color: var(--primary-text-color, var(--app-text)); border: 1px solid var(--divider-color, var(--app-divider)); box-shadow: 0 4px 16px #0003; white-space: normal; text-align: left; line-height: 1.4; font-size: .82rem; }
+.tablewrap:has(.consumption-info[open]) { overflow: visible; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 .preview { grid-column: 1 / -1; border: 1px solid var(--divider-color, var(--app-divider)); border-radius: 8px; padding: 16px; }
 .preview h3 { font-size: 1rem; font-weight: 600; margin: 0 0 4px; }
@@ -107,12 +115,11 @@ tr:last-child td { border-bottom: 0; }
 <label>Bonus 1 €<input name="bonus1" type="number" min="0" step="0.01" value="0"></label>
 <label>Bonus 2 €<input name="bonus2" type="number" min="0" step="0.01" value="0"></label>
 <label>Bonus 3 €<input name="bonus3" type="number" min="0" step="0.01" value="0"></label>
-<label class="wide">Gezahlte Abschläge gesamt €<input name="paid_installments" type="number" min="0" step="0.01" placeholder="Optional"><span class="hint">Summe aller tatsächlich gezahlten Abschläge für diesen Vertrag.</span></label>
+<label class="wide">Gezahlte Abschläge gesamt €<input name="paid_installments" type="number" min="0" step="0.01" placeholder="Optional"></label>
 <section class="preview" aria-live="polite"><h3>Voraussichtliche Vertragskosten</h3><p class="hint">Berechnet mit der vereinbarten kWh-Menge über die gesamte Laufzeit. Die tatsächlichen Kosten stehen in der Vertragsübersicht.</p><div id="preview-content" class="hint">Laufzeit, Grundgebühr, Arbeitspreis und kWh-Menge eingeben.</div></section>
 <fieldset><legend>Manuelle Zählerstände</legend><p class="hint">Optional für abgeschlossene Verträge ohne vollständige Sensordaten. Bitte den Zählerstand am Vertragsbeginn und am Tag nach Vertragsende in kWh eintragen.</p><div class="boundary-fields"><label>Stand bei Vertragsbeginn (kWh)<input name="start_reading" type="number" min="0" step="0.001" placeholder="Optional"></label><label>Stand nach Vertragsende (kWh)<input name="end_reading" type="number" min="0" step="0.001" placeholder="Optional"></label></div></fieldset>
 <div class="actions"><button type="submit">Speichern</button><button type="button" class="secondary" id="cancel">Abbrechen</button></div></form>
 <div id="reading-editor" class="hidden"><h3>Weitere Ablesungen</h3><p class="hint">Für genaue Jahreswerte eine Ablesung zum 1. Januar eintragen. Änderungen werden zusammen mit dem Vertrag gespeichert.</p><div class="reading"><label>Ablesedatum<input id="reading-date" type="date"></label><label>Zählerstand (kWh)<input id="reading-value" type="number" min="0" step="0.001"></label><button type="button" id="reading-add" class="secondary">Ablesung übernehmen</button></div><ul id="reading-list" class="reading-list"></ul></div>
 </section>
 <div id="contracts"></div>
-<p class="hint">Brutto = Grundgebühr + Verbrauch × Arbeitspreis. Effektiv = Brutto − anteilige Boni. Nachzahlung oder Guthaben = effektive Kosten − gezahlte Abschläge. Boni werden nach Vertragstagen verteilt; jährliche Grundgebühren nach Kalendertagen im Jahr, monatliche nach Kalendertagen im Monat. Schätzwerte sind gekennzeichnet.</p>
 </main><script src="app.js"></script></body></html>

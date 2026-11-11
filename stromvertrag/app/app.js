@@ -10,6 +10,7 @@ let readingChanges = {};
 let previewTimer;
 let previewSequence = 0;
 let previousBasePeriod = 'yearly';
+const collapsedContracts = new Set();
 
 function syncThemeFromHomeAssistant() {
   if (window.parent === window) return;
@@ -96,6 +97,8 @@ const ICON_PATHS = {
   check: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1 14.2-4-4 1.4-1.4 2.6 2.6 4.6-4.6 1.4 1.4-6 6z',
   warning: 'M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z',
   estimate: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-5 9.5c1.5-2.5 3.2-2.5 5 0s3.5 2.5 5 0v2c-1.5 2.5-3.2 2.5-5 0s-3.5-2.5-5 0v-2z',
+  expand: 'M7 10l5 5 5-5-1.4-1.4L12 12.2 8.4 8.6 7 10z',
+  collapse: 'M7 14l5-5 5 5-1.4 1.4L12 11.8l-3.6 3.6L7 14z',
 };
 
 function icon(name) {
@@ -123,18 +126,58 @@ function iconButton(name, label, handler, kind = 'secondary') {
   return element;
 }
 
-function statusIcon(status) {
+function consumptionInfo(status, description) {
   const kind = status === 'Zählerstände' ? 'manual'
     : status === 'Statistik' ? 'statistics'
     : status.includes('geschätzt') ? 'estimated'
     : status.includes('unvollständig') ? 'partial' : 'missing';
-  const element = node('button', '', 'status-indicator ' + kind);
-  element.type = 'button';
-  element.setAttribute('aria-label', status);
-  element.title = status;
-  element.onclick = () => notice(status);
-  element.append(icon(kind === 'manual' || kind === 'statistics' ? 'check' : kind === 'estimated' ? 'estimate' : 'warning'));
-  return element;
+  const details = node('details', '', 'consumption-info');
+  const trigger = node('summary');
+  trigger.setAttribute('aria-label', 'Hinweis zum Verbrauch: ' + status);
+  const symbol = node('span', '', 'status-indicator ' + kind);
+  symbol.append(icon(kind === 'manual' || kind === 'statistics' ? 'check' : kind === 'estimated' ? 'estimate' : 'warning'));
+  trigger.append(symbol);
+  details.append(trigger, node('span', description || status, 'consumption-info-text'));
+  return details;
+}
+
+function consumptionValue(value, status, description) {
+  const wrapper = node('span', '', 'consumption-value');
+  wrapper.append(node('span', kwh(value)));
+  wrapper.append(consumptionInfo(status, description));
+  return wrapper;
+}
+
+function aggregate(contract) {
+  let total = 0, totalKwh = 0, hasTotal = false, complete = true, estimated = false;
+  for (const year of contract.years) {
+    if (year.net != null && year.kwh != null) { total += year.net; totalKwh += year.kwh; hasTotal = true; }
+    if (year.kwh == null || year.status.includes('unvollständig')) complete = false;
+    if (year.status.includes('geschätzt')) estimated = true;
+  }
+  return { total, totalKwh, hasTotal, complete, estimated };
+}
+
+function totalConsumptionInfo(hasTotal, complete, estimated) {
+  if (!hasTotal) return 'Für diesen Vertrag liegen noch keine Verbrauchsdaten vor.';
+  const details = ['Summe der verfügbaren Jahresverbräuche.'];
+  if (estimated) details.push('Jahresanteile ohne passende Grenzstände sind geschätzt.');
+  if (!complete) details.push('Messdaten sind lückenhaft; der tatsächliche Verbrauch kann höher sein.');
+  return details.join(' ');
+}
+
+function yearConsumptionInfo(status) {
+  if (status === 'Zählerstände') return 'Verbrauch aus den eingetragenen Zählerständen an beiden Zeitraumgrenzen.';
+  if (status === 'Statistik') return 'Verbrauch aus stündlichen Werten der Langzeitstatistik. Das laufende Jahr ist ein Zwischenstand.';
+  if (status === 'Statistik (unvollständig)') return 'Stündliche Statistikwerte fehlen teilweise. Der angezeigte Verbrauch kann zu niedrig sein.';
+  if (status.includes('geschätzt')) return 'Dieser Jahresanteil wurde aus den Endständen und den verfügbaren Statistikwerten geschätzt.';
+  return status;
+}
+
+function compactMetric(label, value) {
+  const wrapper = node('span');
+  wrapper.append(node('strong', label + ': '), value);
+  return wrapper;
 }
 
 function fact(label, value) {
@@ -249,6 +292,12 @@ function render() {
     return;
   }
   for (const contract of items) {
+    const { total, totalKwh, hasTotal, complete, estimated } = aggregate(contract);
+    const isCollapsed = collapsedContracts.has(contract.id);
+    const consumptionStatus = estimated ? 'Aus Endständen geschätzt'
+      : !complete ? 'Statistik (unvollständig)'
+      : contract.years.every((year) => year.status === 'Zählerstände') ? 'Zählerstände' : 'Statistik';
+    const consumptionDescription = totalConsumptionInfo(hasTotal, complete, estimated);
     const card = node('section', '', 'card');
     const head = node('div', '', 'contract-head');
     const heading = node('div');
@@ -261,11 +310,30 @@ function render() {
     actions.append(iconButton('edit', 'Vertrag bearbeiten', () => openEditor(contract)));
     actions.append(iconButton('delete', 'Vertrag löschen', async () => {
       if (!confirm('Vertrag und Ablesungen löschen?')) return;
-      try { await api('contracts/' + contract.id, 'DELETE'); await load(); }
+      try { await api('contracts/' + contract.id, 'DELETE'); collapsedContracts.delete(contract.id); await load(); }
       catch (error) { notice(error.message); }
     }, 'danger'));
+    const toggle = iconButton(isCollapsed ? 'expand' : 'collapse', isCollapsed ? 'Vertrag aufklappen' : 'Vertrag einklappen', () => {
+      if (isCollapsed) collapsedContracts.delete(contract.id);
+      else collapsedContracts.add(contract.id);
+      render();
+    });
+    toggle.setAttribute('aria-expanded', String(!isCollapsed));
+    actions.append(toggle);
     head.append(heading, actions);
     card.append(head);
+
+    if (isCollapsed) {
+      const details = node('div', '', 'collapsed-details');
+      details.append(
+        compactMetric('Verbrauch', consumptionValue(hasTotal ? totalKwh : null, consumptionStatus, consumptionDescription)),
+        compactMetric('Eff. Kosten', node('span', hasTotal ? euro(total) : '–')),
+        compactMetric('Eff. kWh', node('span', hasTotal && totalKwh > 0 ? euroPerKwh(total / totalKwh) : '–')),
+      );
+      heading.append(details);
+      box.append(card);
+      continue;
+    }
 
     const facts = node('dl', '', 'contract-facts');
     facts.append(
@@ -283,7 +351,7 @@ function render() {
       ['Jahr', 'Vertragszeitraum im Kalenderjahr'], ['Verbrauch', 'Gemessener oder ergänzter Verbrauch'],
       ['Grundpreis', 'Anteilig berechnete Grundgebühr'], ['Arbeit', 'Verbrauchskosten zum Arbeitspreis'],
       ['Brutto', 'Grundpreis plus Verbrauchskosten'], ['Bonus', 'Anteilig zugeordnete Boni'],
-      ['Effektiv', 'Brutto abzüglich Boni'], ['Datenlage', 'Herkunft der Verbrauchsdaten'],
+      ['Effektiv', 'Brutto abzüglich Boni'],
     ]) {
       const cell = node('th', label);
       cell.title = explanation;
@@ -291,31 +359,31 @@ function render() {
     }
     const thead = node('thead'); thead.append(header); table.append(thead);
     const tbody = node('tbody');
-    let total = 0, totalKwh = 0, hasTotal = false, complete = true, estimated = false;
     for (const year of contract.years) {
       const row = node('tr');
       const period = node('td', '', 'period-cell');
       period.append(node('strong', String(year.year)), node('small', displayDate(year.from) + ' – ' + displayDate(year.to)));
       row.append(period);
-      for (const value of [kwh(year.kwh), euro(year.base), euro(year.energy), euro(year.gross), euro(year.bonus), euro(year.net)]) row.append(node('td', value));
-      const statusCell = node('td'); statusCell.append(statusIcon(year.status)); row.append(statusCell);
+      const consumptionCell = node('td');
+      consumptionCell.append(consumptionValue(year.kwh, year.status, yearConsumptionInfo(year.status)));
+      row.append(consumptionCell);
+      for (const value of [euro(year.base), euro(year.energy), euro(year.gross), euro(year.bonus), euro(year.net)]) row.append(node('td', value));
       tbody.append(row);
-      if (year.net != null) { total += year.net; totalKwh += year.kwh; hasTotal = true; }
-      if (year.kwh == null || year.status.includes('unvollständig')) complete = false;
-      if (year.status.includes('geschätzt')) estimated = true;
     }
     table.append(tbody); tableWrap.append(table); card.append(tableWrap);
 
     const summary = node('div', '', 'summary');
     const paid = contract.paid_installments == null || contract.paid_installments === '' ? null : Number(contract.paid_installments);
     for (const [label, value] of [
-      [finished ? 'Verbrauch gesamt' : 'Verbrauch bisher', hasTotal ? kwh(totalKwh) : '–'],
+      [finished ? 'Verbrauch gesamt' : 'Verbrauch bisher', consumptionValue(hasTotal ? totalKwh : null, consumptionStatus, consumptionDescription)],
       [finished ? 'Effektive Gesamtkosten' : 'Effektive Kosten bisher', hasTotal ? euro(total) : '–'],
       ['Effektive Kosten je kWh', hasTotal && totalKwh > 0 ? euroPerKwh(total / totalKwh) : '–'],
       ['Gezahlte Abschläge', paid == null ? '–' : euro(paid)],
     ]) {
       const paragraph = node('p');
-      paragraph.append(node('strong', label), node('span', value, 'summary-value'));
+      const display = typeof value === 'string' ? node('span', value, 'summary-value') : value;
+      if (typeof value !== 'string') display.classList.add('summary-value');
+      paragraph.append(node('strong', label), display);
       summary.append(paragraph);
     }
     const settlement = node('p', '', 'settlement');
@@ -328,8 +396,6 @@ function render() {
       settlement.append(node('strong', 'Nachzahlung / Guthaben'), node('span', '–', 'summary-value'));
     }
     summary.append(settlement);
-    if (paid == null) summary.append(node('span', 'Für Nachzahlung oder Guthaben die gezahlten Abschläge im Vertrag ergänzen.', 'summary-note'));
-    if (!complete || estimated) summary.append(node('span', [!complete ? 'Messdaten lückenhaft' : '', estimated ? 'Jahresanteile geschätzt' : ''].filter(Boolean).join(' · '), 'summary-note'));
     card.append(summary);
     if (!contract.years.length) card.append(node('p', 'Dieser Vertrag beginnt in der Zukunft.', 'muted'));
     box.append(card);
