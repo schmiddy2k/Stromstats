@@ -14,12 +14,13 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
-from model import calculate, consumption, fill_from_contract_readings, parse_date, sections, validate_contract
+from model import calculate, consumption, fill_from_contract_readings, parse_date, preview_contract, sections, validate_contract
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 DB = DATA_DIR / "contracts.sqlite3"
 LOCK = Lock()
 STATIC = Path(__file__).with_name("index.html")
+SCRIPT = Path(__file__).with_name("app.js")
 SUPERVISOR = os.environ.get("SUPERVISOR_URL", "http://supervisor")
 
 
@@ -163,7 +164,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; base-uri 'none'; frame-ancestors 'self'")
+        self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'none'; frame-ancestors 'self'")
         self.end_headers()
         self.wfile.write(body)
 
@@ -183,13 +184,18 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if self.command == "GET" and path in ("/", "/index.html"):
             self._send(200, STATIC.read_bytes(), "text/html; charset=utf-8")
+        elif self.command == "GET" and path == "/app.js":
+            self._send(200, SCRIPT.read_bytes(), "text/javascript; charset=utf-8")
         elif self.command == "GET" and path == "/api/contracts":
             self._send(200, contracts())
         elif self.command == "GET" and path == "/api/report":
             self._send(200, report())
         elif self.command == "GET" and path == "/api/settings":
             config = ha("GET", "/config")
-            self._send(200, {"language": config.get("language") or "de"})
+            tz = ZoneInfo(config.get("time_zone") or "Europe/Berlin")
+            self._send(200, {"language": config.get("language") or "de", "today": datetime.now(tz).date().isoformat()})
+        elif self.command == "POST" and path == "/api/preview":
+            self._send(200, preview_contract(self._json()))
         elif self.command == "GET" and path == "/api/entities":
             states = ha("GET", "/states")
             sensors = []

@@ -3,7 +3,7 @@ import tempfile
 import unittest
 import json
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 import server
@@ -11,6 +11,18 @@ from model import validate_contract
 
 
 class ReportTest(unittest.TestCase):
+    def test_frontend_script_is_served_through_ingress(self):
+        handler = server.Handler.__new__(server.Handler)
+        handler.client_address = ("172.30.32.2", 1234)
+        handler.path = "/app.js"
+        handler.command = "GET"
+        handler._send = Mock()
+        handler._dispatch()
+        status, body, content_type = handler._send.call_args.args
+        self.assertEqual(status, 200)
+        self.assertIn(b"schedulePreview", body)
+        self.assertEqual(content_type, "text/javascript; charset=utf-8")
+
     def test_contracts_sorted_by_start_not_creation(self):
         with tempfile.TemporaryDirectory() as temp, patch.object(server, "DATA_DIR", Path(temp)), patch.object(server, "DB", Path(temp) / "contracts.sqlite3"):
             with server.database() as conn:

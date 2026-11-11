@@ -36,7 +36,10 @@ def validate_contract(raw: dict) -> dict:
     result = {key: str(raw[key]).strip() for key in ("provider", "tariff")}
     result.update(start=start.isoformat(), end=end.isoformat(), entity_id=entity)
     for key in ("base_monthly", "price_kwh", "contract_kwh", "bonus1", "bonus2", "bonus3"):
-        result[key] = str(money(raw.get(key, 0), key))
+        value = raw.get(key, 0)
+        if key.startswith("bonus") and (value is None or str(value).strip() == ""):
+            value = 0
+        result[key] = str(money(value, key))
     return result
 
 
@@ -50,6 +53,23 @@ def months_cost(start: date, end_exclusive: date, monthly: Decimal) -> Decimal:
         total += monthly * Decimal((boundary - cursor).days) / Decimal((next_month - date(cursor.year, cursor.month, 1)).days)
         cursor = boundary
     return total
+
+
+def preview_contract(raw: dict) -> dict:
+    """Full-term estimate based on the contracted kWh, before meter data exists."""
+    contract = validate_contract({**raw, "provider": "Vorschau", "tariff": "Vorschau"})
+    start = date.fromisoformat(contract["start"])
+    end = date.fromisoformat(contract["end"]) + timedelta(days=1)
+    base = months_cost(start, end, Decimal(contract["base_monthly"]))
+    energy = Decimal(contract["contract_kwh"]) * Decimal(contract["price_kwh"])
+    bonuses = sum((Decimal(contract[f"bonus{i}"]) for i in (1, 2, 3)), Decimal(0))
+    effective = base + energy - bonuses
+    planned_kwh = Decimal(contract["contract_kwh"])
+    return {
+        "base": float(base), "energy": float(energy), "gross": float(base + energy),
+        "bonus": float(bonuses), "effective": float(effective),
+        "effective_per_kwh": float(effective / planned_kwh) if planned_kwh else None,
+    }
 
 
 def sections(contract: dict, today: date | None = None) -> list[tuple[date, date]]:

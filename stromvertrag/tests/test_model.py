@@ -5,7 +5,7 @@ from decimal import Decimal
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
-from model import calculate, consumption, fill_from_contract_readings, months_cost, sections, validate_contract
+from model import calculate, consumption, fill_from_contract_readings, months_cost, preview_contract, sections, validate_contract
 
 
 RAW = {"provider": "Beispiel", "tariff": "Fix", "start": "2025-07-01", "end": "2026-06-30", "base_monthly": "12", "price_kwh": "0.3", "contract_kwh": "3000", "bonus1": "120", "bonus2": "0", "bonus3": "0", "entity_id": "sensor.strom_kwh"}
@@ -23,6 +23,10 @@ class ModelTest(unittest.TestCase):
 
     def test_partial_month_leap_year(self):
         self.assertEqual(months_cost(date(2024, 2, 15), date(2024, 3, 1), Decimal(29)), Decimal(15))
+
+    def test_live_preview_uses_full_term_and_contract_kwh(self):
+        preview = preview_contract({**RAW, "start": "2025-01-01", "end": "2025-12-31", "base_monthly": "10", "price_kwh": "0.30", "contract_kwh": "1000", "bonus1": "50", "bonus2": "25", "bonus3": "0"})
+        self.assertEqual(preview, {"base": 120.0, "energy": 300.0, "gross": 420.0, "bonus": 75.0, "effective": 345.0, "effective_per_kwh": 0.345})
 
     def test_manual_readings_override_gaps(self):
         value, status = consumption(date(2025, 1, 1), date(2026, 1, 1), [], {"2025-01-01": "100", "2026-01-01": "1800"})

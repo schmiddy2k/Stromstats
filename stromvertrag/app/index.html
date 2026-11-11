@@ -37,11 +37,14 @@ legend { font-weight: 500; padding: 0 6px; }
 .boundary-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 12px; }
 .hidden { display: none; }
 .summary { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 12px; }
-.summary p { margin: 0; }
+.summary p { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.summary strong { font-weight: 700; }
+.summary .summary-value { font-size: 1.12rem; }
 .tablewrap { overflow: auto; margin-top: 18px; }
 table { border-collapse: collapse; width: 100%; white-space: nowrap; }
 th, td { padding: 12px 10px; text-align: right; border-bottom: 1px solid var(--divider-color, var(--app-divider)); }
 th:first-child, td:first-child { text-align: left; }
+th:last-child, td:last-child { text-align: center; }
 th { font-size: .8rem; font-weight: 500; color: var(--secondary-text-color, var(--app-secondary)); }
 tr:last-child td { border-bottom: 0; }
 .reading { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; margin-top: 16px; padding-top: 8px; }
@@ -51,16 +54,37 @@ tr:last-child td { border-bottom: 0; }
 .reading-list li span { flex: 1; }
 #notice { padding: 12px; border-radius: 4px; background: #fff3cd; color: #533f03; margin: 16px 0; }
 .contract-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; flex-wrap: wrap; }
-.contract-head h2 { margin: 0; }
+.contract-head h2 { margin: 0; font-weight: 700; }
 .contract-head p { margin: 4px 0 0; }
 .contract-actions { display: flex; gap: 4px; }
+.contract-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.contract-state { color: var(--secondary-text-color, var(--app-secondary)); background: var(--secondary-background-color, var(--app-background)); border: 1px solid var(--divider-color, var(--app-divider)); border-radius: 20px; padding: 3px 9px; font-size: .75rem; }
+.contract-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin: 16px 0 0; border-top: 1px solid var(--divider-color, var(--app-divider)); border-bottom: 1px solid var(--divider-color, var(--app-divider)); }
+.contract-facts .fact { padding: 13px 16px 13px 0; min-width: 0; }
+.contract-facts dt { color: var(--secondary-text-color, var(--app-secondary)); font-size: .75rem; margin-bottom: 4px; }
+.contract-facts dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.icon-button { display: inline-flex; align-items: center; justify-content: center; width: 38px; min-width: 38px; height: 38px; padding: 0; }
+.icon-button svg, .status-indicator svg { width: 20px; height: 20px; fill: currentColor; }
+.status-indicator { display: inline-flex; align-items: center; justify-content: center; width: 28px; min-width: 28px; height: 28px; min-height: 28px; padding: 0; border: 0; background: transparent; }
+.status-indicator.manual { color: var(--success-color, #43a047); }
+.status-indicator.statistics { color: var(--primary-color, #03a9f4); }
+.status-indicator.estimated, .status-indicator.partial { color: var(--warning-color, #e59a17); }
+.status-indicator.missing { color: var(--error-color, #db4437); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.preview { grid-column: 1 / -1; border: 1px solid var(--divider-color, var(--app-divider)); border-radius: 8px; padding: 16px; }
+.preview h3 { font-size: 1rem; font-weight: 600; margin: 0 0 4px; }
+.preview-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 14px 0 0; font-size: 1rem; color: var(--primary-text-color, var(--app-text)); }
+.preview-grid div { min-width: 0; }
+.preview-grid dt { color: var(--secondary-text-color, var(--app-secondary)); font-size: .75rem; }
+.preview-grid dd { margin: 4px 0 0; font-weight: 600; }
+.preview-grid .effective dd { color: var(--primary-color, #03a9f4); }
 .empty { text-align: center; padding: 42px 10px; }
 @media (prefers-color-scheme: dark) {
   :root { color-scheme: dark; --app-background: #111; --app-card: #1c1c1c; --app-text: #eee; --app-secondary: #aaa; --app-divider: #444; }
   #notice { background: #533f03; color: #fff3cd; }
 }
-@media (max-width: 760px) { form { grid-template-columns: repeat(2, minmax(0, 1fr)); } main { padding: 16px; } }
-@media (max-width: 460px) { form { grid-template-columns: 1fr; } form .wide { grid-column: span 1; } .boundary-fields { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { form { grid-template-columns: repeat(2, minmax(0, 1fr)); } main { padding: 16px; } .contract-facts, .preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 460px) { form { grid-template-columns: 1fr; } form .wide { grid-column: span 1; } .boundary-fields, .preview-grid { grid-template-columns: 1fr; } }
 </style></head><body><main>
 <div class="top"><div><h1>Stromverträge</h1><p class="muted">Verbrauch und Kosten nach Vertrag und Jahr</p></div><button id="new">Vertrag hinzufügen</button></div>
 <div id="notice" class="hidden"></div>
@@ -74,35 +98,11 @@ tr:last-child td { border-bottom: 0; }
 <label>Bonus 1 €<input name="bonus1" type="number" min="0" step="0.01" value="0"></label>
 <label>Bonus 2 €<input name="bonus2" type="number" min="0" step="0.01" value="0"></label>
 <label>Bonus 3 €<input name="bonus3" type="number" min="0" step="0.01" value="0"></label>
+<section class="preview" aria-live="polite"><h3>Voraussichtliche Vertragskosten</h3><p class="hint">Berechnet mit der vereinbarten kWh-Menge über die gesamte Laufzeit. Die tatsächlichen Kosten stehen in der Vertragsübersicht.</p><div id="preview-content" class="hint">Laufzeit, Grundgebühr, Arbeitspreis und kWh-Menge eingeben.</div></section>
 <fieldset><legend>Manuelle Zählerstände</legend><p class="hint">Optional für abgeschlossene Verträge ohne vollständige Sensordaten. Bitte den Zählerstand am Vertragsbeginn und am Tag nach Vertragsende in kWh eintragen.</p><div class="boundary-fields"><label>Stand bei Vertragsbeginn (kWh)<input name="start_reading" type="number" min="0" step="0.001" placeholder="Optional"></label><label>Stand nach Vertragsende (kWh)<input name="end_reading" type="number" min="0" step="0.001" placeholder="Optional"></label></div></fieldset>
 <div class="actions"><button type="submit">Speichern</button><button type="button" class="secondary" id="cancel">Abbrechen</button></div></form>
 <div id="reading-editor" class="hidden"><h3>Weitere Ablesungen</h3><p class="hint">Für genaue Jahreswerte eine Ablesung zum 1. Januar eintragen. Änderungen werden zusammen mit dem Vertrag gespeichert.</p><div class="reading"><label>Ablesedatum<input id="reading-date" type="date"></label><label>Zählerstand (kWh)<input id="reading-value" type="number" min="0" step="0.001"></label><button type="button" id="reading-add" class="secondary">Ablesung übernehmen</button></div><ul id="reading-list" class="reading-list"></ul></div>
 </section>
 <div id="contracts"></div>
 <p class="hint">Brutto = Grundgebühr + Verbrauch × Arbeitspreis. Effektiv = Brutto − anteilige Boni. Boni werden nach Vertragstagen, Grundgebühren nach Kalendermonatstagen verteilt. Schätzwerte sind gekennzeichnet.</p>
-</main><script>
-const $=s=>document.querySelector(s), box=$('#contracts'), form=$('#form');let editing=null,items=[],locale='de',readingDraft={},readingChanges={};
-const euro=n=>n==null?'–':new Intl.NumberFormat(locale,{style:'currency',currency:'EUR'}).format(n);
-const kwh=n=>n==null?'–':new Intl.NumberFormat(locale,{maximumFractionDigits:2}).format(n)+' kWh';
-function displayDate(iso){if(!iso)return '';const [y,m,d]=iso.split('-').map(Number);return new Intl.DateTimeFormat(locale,{day:'2-digit',month:'2-digit',year:'numeric',timeZone:'UTC'}).format(new Date(Date.UTC(y,m-1,d)))}
-function node(tag,content='',className=''){const e=document.createElement(tag);e.textContent=content;e.className=className;return e}
-function notice(message){const e=$('#notice');e.textContent=message;e.classList.toggle('hidden',!message)}
-async function api(path,method='GET',body){const r=await fetch('./api/'+path,{method,headers:{'Content-Type':'application/json','X-Requested-With':'Stromvertrag'},body:body?JSON.stringify(body):undefined});const data=await r.json();if(!r.ok)throw Error(data.error||'Anfrage fehlgeschlagen');return data}
-function dayAfter(day){return new Date(Date.parse(day+'T00:00:00Z')+86400000).toISOString().slice(0,10)}
-function renderReadings(){const list=$('#reading-list'),start=form.elements.namedItem('start').value,end=form.elements.namedItem('end').value;list.replaceChildren();for(const [day,value] of Object.entries(readingDraft).sort(([a],[b])=>a.localeCompare(b))){if(day===start||(end&&day===dayAfter(end)))continue;const li=node('li'),label=node('span',displayDate(day)+' · '+kwh(Number(value)));li.append(label,button('Entfernen',()=>{delete readingDraft[day];readingChanges[day]=null;renderReadings()},'danger'));list.append(li)}}
-function openEditor(item){editing=item?.id||null;readingDraft={...(item?.readings||{})};readingChanges={};$('#editor-title').textContent=item?'Vertrag bearbeiten':'Vertrag anlegen';form.reset();$('#reading-editor').classList.remove('hidden');$('#reading-date').value='';$('#reading-value').value='';if(item){const select=form.elements.namedItem('entity_id');if(item.entity_id&&![...select.options].some(o=>o.value===item.entity_id)){const o=node('option',item.entity_id);o.value=item.entity_id;select.append(o)}for(const [key,value] of Object.entries(item)){const field=form.elements.namedItem(key);if(field)field.value=value}form.elements.namedItem('start_reading').value=item.readings?.[item.start]??'';form.elements.namedItem('end_reading').value=item.readings?.[dayAfter(item.end)]??''}renderReadings();form.elements.namedItem('start').onchange=()=>{if(item&&form.elements.namedItem('start').value!==item.start)form.elements.namedItem('start_reading').value='';renderReadings()};form.elements.namedItem('end').onchange=()=>{if(item&&form.elements.namedItem('end').value!==item.end)form.elements.namedItem('end_reading').value='';renderReadings()};$('#editor').classList.remove('hidden');$('#editor').scrollIntoView({behavior:'smooth'})}
-$('#reading-date').onchange=()=>{$('#reading-value').value=readingDraft[$('#reading-date').value]??''};
-$('#reading-add').onclick=()=>{const day=$('#reading-date').value,value=$('#reading-value').value,start=form.elements.namedItem('start').value,end=form.elements.namedItem('end').value;if(!day||!value){notice('Ablesedatum und Zählerstand eingeben.');return}if(!start||!end||day<=start||day>=dayAfter(end)){notice('Weitere Ablesungen müssen innerhalb der Vertragslaufzeit liegen. Die Grenzstände stehen oben im Formular.');return}if(!Number.isFinite(Number(value))||Number(value)<0){notice('Ungültiger Zählerstand.');return}readingDraft[day]=value;readingChanges[day]=value;renderReadings();notice('Ablesung vorgemerkt. Bitte den Vertrag speichern.')};
-$('#new').onclick=()=>openEditor(null);$('#cancel').onclick=()=>$('#editor').classList.add('hidden');
-form.onsubmit=async e=>{e.preventDefault();try{const body=Object.fromEntries(new FormData(form));body.reading_changes=readingChanges;await api(editing?'contracts/'+editing:'contracts',editing?'PUT':'POST',body);$('#editor').classList.add('hidden');notice('Vertrag gespeichert.');await load()}catch(err){notice(err.message)}};
-function button(label,handler,kind='secondary'){const b=node('button',label,kind);b.onclick=handler;return b}
-function render(){box.replaceChildren();if(!items.length){box.append(node('div','Noch keine Verträge. Lege den ersten Vertrag an.','card empty'));return}
-for(const c of items){const card=node('section','','card'),head=node('div','','contract-head'),title=node('div'),h=node('h2',c.provider+' · '+c.tariff),sub=node('p',displayDate(c.start)+' bis '+displayDate(c.end)+' · '+c.contract_kwh+' kWh vereinbart · '+(c.entity_id||'Manuelle Ablesungen'),'muted');title.append(h,sub);const actions=node('div','','contract-actions');actions.append(button('Bearbeiten',()=>openEditor(c)),button('Löschen',async()=>{if(!confirm('Vertrag und Ablesungen löschen?'))return;try{await api('contracts/'+c.id,'DELETE');await load()}catch(err){notice(err.message)}},'danger'));head.append(title,actions);card.append(head);
-const wrap=node('div','','tablewrap'),table=node('table'),thead=node('thead'),tr=node('tr');for(const text of ['Jahr / Zeitraum','Verbrauch','Grundgebühr','Arbeitspreis','Brutto','Bonus','Effektiv','Datenlage'])tr.append(node('th',text));thead.append(tr);table.append(thead);const tbody=node('tbody');let total=0,totalKwh=0,hasTotal=false,complete=true,estimated=false;for(const y of c.years){const row=node('tr');for(const value of [String(y.year)+' · '+displayDate(y.from)+' – '+displayDate(y.to),kwh(y.kwh),euro(y.base),euro(y.energy),euro(y.gross),euro(y.bonus),euro(y.net),y.status])row.append(node('td',value));tbody.append(row);if(y.net!=null){total+=y.net;totalKwh+=y.kwh;hasTotal=true}if(y.kwh==null||y.status.includes('unvollständig'))complete=false;if(y.status.includes('geschätzt'))estimated=true}table.append(tbody);wrap.append(table);card.append(wrap);const summary=node('div','','summary');const suffix=(complete?'':' (lückenhaft)')+(estimated?' (Jahresanteile geschätzt)':'');summary.append(node('p','Verbrauch bisher: '+(hasTotal?kwh(totalKwh):'–')+suffix),node('p','Effektive Kosten bisher: '+(hasTotal?euro(total):'–')+suffix));card.append(summary);
-if(!c.years.length)card.append(node('p','Dieser Vertrag beginnt in der Zukunft.','muted'));box.append(card)}}
-async function load(){try{items=await api('report');render()}catch(err){notice(err.message)}}
-async function entities(){try{const list=await api('entities'),sel=form.elements.namedItem('entity_id');for(const s of list){const o=node('option',s.name+' ('+s.id+', '+s.unit+')');o.value=s.id;sel.append(o)}}catch(err){notice(err.message)}}
-async function settings(){try{const config=await api('settings');locale=String(config.language||'de').replace('_','-');new Intl.DateTimeFormat(locale);document.documentElement.lang=locale}catch{locale='de'}}
-async function start(){await settings();await Promise.all([entities(),load()])}
-start();
-</script></body></html>
+</main><script src="app.js"></script></body></html>
