@@ -1,5 +1,5 @@
 name: Stromvertragsanalyse
-version: "0.1.0"
+version: "0.2.0"
 slug: stromvertrag
 description: Stromverträge und Verbrauch über Kalenderjahre auswerten
 arch:
@@ -16,3 +16,4 @@ homeassistant_api: true
 map:
   - type: data
     read_only: false
+backup: cold

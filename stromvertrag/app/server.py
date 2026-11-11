@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
-from model import calculate, consumption, parse_date, sections, validate_contract
+from model import calculate, consumption, fill_from_contract_readings, parse_date, sections, validate_contract
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 DB = DATA_DIR / "contracts.sqlite3"
@@ -57,34 +57,64 @@ def readings(contract_id: int):
         return {r["day"]: r["kwh"] for r in conn.execute("SELECT day, kwh FROM readings WHERE contract_id=?", (contract_id,))}
 
 
+def boundary_updates(raw: dict, contract: dict) -> dict[str, str | None]:
+    """Optional API fields; absent fields leave existing readings untouched."""
+    updates = {}
+    dates = {"start_reading": contract["start"], "end_reading": (date.fromisoformat(contract["end"]) + timedelta(days=1)).isoformat()}
+    for field, day in dates.items():
+        if field not in raw:
+            continue
+        value = str(raw[field]).strip().replace(",", ".") if raw[field] is not None else ""
+        if value:
+            try:
+                number = Decimal(value)
+            except InvalidOperation:
+                raise ValueError(f"{field}: ungültiger Zählerstand") from None
+            if not number.is_finite() or number < 0:
+                raise ValueError(f"{field}: Zählerstand muss mindestens 0 sein")
+            updates[day] = str(number)
+        else:
+            updates[day] = None
+    if updates.get(dates["start_reading"]) is not None and updates.get(dates["end_reading"]) is not None:
+        if Decimal(updates[dates["end_reading"]]) < Decimal(updates[dates["start_reading"]]):
+            raise ValueError("Endzählerstand liegt vor dem Anfangszählerstand")
+    return updates
+
+
+def save_boundaries(conn, contract_id: int, updates: dict[str, str | None]):
+    for day, value in updates.items():
+        if value is None:
+            conn.execute("DELETE FROM readings WHERE contract_id=? AND day=?", (contract_id, day))
+        else:
+            conn.execute("INSERT OR REPLACE INTO readings VALUES(?,?,?)", (contract_id, day, value))
+
+
 def report():
     tz_name = ha("GET", "/config").get("time_zone", "Europe/Berlin")
     tz = ZoneInfo(tz_name)
     output = []
     for contract in contracts():
-        periods = sections(contract)
+        periods = sections(contract, datetime.now(tz).date())
         if not periods:
             output.append({**contract, "readings": readings(contract["id"]), "years": []})
             continue
-        from datetime import datetime, time
+        from datetime import time
         first, last = periods[0][0], periods[-1][1]
         payload = {"start_time": datetime.combine(first, time.min, tz).isoformat(), "end_time": datetime.combine(last, time.min, tz).isoformat(),
                    "statistic_ids": [contract["entity_id"]], "period": "hour", "types": ["change"], "units": {"energy": "kWh"}}
-        try:
-            result = ha("POST", "/services/recorder/get_statistics?return_response", payload)
-            rows = result["service_response"]["statistics"].get(contract["entity_id"], [])
-        except (RuntimeError, KeyError, TypeError) as exc:
-            rows = []
-            error = str(exc)
-        else:
-            error = None
+        rows, error = [], None
+        if contract.get("entity_id"):
+            try:
+                result = ha("POST", "/services/recorder/get_statistics?return_response", payload)
+                rows = result["service_response"]["statistics"].get(contract["entity_id"], [])
+            except (RuntimeError, KeyError, TypeError) as exc:
+                error = str(exc)
         # Recorder timestamps are UTC. Assign rows to local calendar years.
         for row in rows:
-            from datetime import datetime
             row["start"] = datetime.fromisoformat(row["start"]).astimezone(tz).isoformat()
             row["end"] = datetime.fromisoformat(row["end"]).astimezone(tz).isoformat()
         manual = readings(contract["id"])
-        years = []
+        measured = []
         for start, end in periods:
             try:
                 kwh, status = consumption(start, end, rows, manual)
@@ -92,7 +122,9 @@ def report():
                 kwh, status = None, str(exc)
             if error and kwh is None:
                 status = error
-            years.append(calculate(contract, start, end, kwh, status))
+            measured.append((kwh, status))
+        measured = fill_from_contract_readings(contract, periods, measured, manual)
+        years = [calculate(contract, start, end, kwh, status) for (start, end), (kwh, status) in zip(periods, measured)]
         output.append({**contract, "readings": manual, "years": years})
     return output
 
@@ -138,9 +170,12 @@ class Handler(BaseHTTPRequestHandler):
                     sensors.append({"id": state["entity_id"], "name": state["attributes"].get("friendly_name", state["entity_id"]), "unit": unit})
             self._send(200, sorted(sensors, key=lambda s: s["name"].lower()))
         elif self.command == "POST" and path == "/api/contracts":
-            body = validate_contract(self._json())
+            raw = self._json()
+            body = validate_contract(raw)
+            updates = boundary_updates(raw, body)
             with LOCK, database() as conn:
                 cursor = conn.execute("INSERT INTO contracts(body) VALUES(?)", (json.dumps(body),))
+                save_boundaries(conn, cursor.lastrowid, updates)
                 self._send(201, {"id": cursor.lastrowid})
         elif self.command in ("PUT", "DELETE") and path.startswith("/api/contracts/"):
             contract_id = int(path.rsplit("/", 1)[1])
@@ -148,8 +183,11 @@ class Handler(BaseHTTPRequestHandler):
                 if not conn.execute("SELECT 1 FROM contracts WHERE id=?", (contract_id,)).fetchone():
                     self._send(404, {"error": "Vertrag nicht gefunden"}); return
                 if self.command == "PUT":
-                    body = validate_contract(self._json())
+                    raw = self._json()
+                    body = validate_contract(raw)
+                    updates = boundary_updates(raw, body)
                     conn.execute("UPDATE contracts SET body=? WHERE id=?", (json.dumps(body), contract_id))
+                    save_boundaries(conn, contract_id, updates)
                 else:
                     if self.headers.get("X-Requested-With") != "Stromvertrag":
                         raise ValueError("Ungültige Anfrage")

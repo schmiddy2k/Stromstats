@@ -23,15 +23,15 @@ def parse_date(value: str, name: str) -> date:
 
 
 def validate_contract(raw: dict) -> dict:
-    required = ("provider", "tariff", "start", "end", "base_monthly", "price_kwh", "contract_kwh", "entity_id")
+    required = ("provider", "tariff", "start", "end", "base_monthly", "price_kwh", "contract_kwh")
     for key in required:
         if raw.get(key) is None or str(raw[key]).strip() == "":
             raise ValueError(f"{key}: Pflichtfeld")
     start, end = parse_date(raw["start"], "Beginn"), parse_date(raw["end"], "Ende")
     if end < start:
         raise ValueError("Vertragsende liegt vor Vertragsbeginn")
-    entity = str(raw["entity_id"]).strip()
-    if not entity.startswith("sensor.") or not all(c.islower() or c.isdigit() or c in "._" for c in entity):
+    entity = str(raw.get("entity_id") or "").strip()
+    if entity and (not entity.startswith("sensor.") or not all(c.islower() or c.isdigit() or c in "._" for c in entity)):
         raise ValueError("Bitte einen gültigen kWh-Sensor wählen")
     result = {key: str(raw[key]).strip() for key in ("provider", "tariff")}
     result.update(start=start.isoformat(), end=end.isoformat(), entity_id=entity)
@@ -111,3 +111,39 @@ def consumption(start: date, end: date, rows: list[dict], readings: dict[str, st
             gap = True
         covered_until = max(covered_until, span_end)
     return total, "Statistik" if first <= begins and last >= ends and not gap else "Statistik (unvollständig)"
+
+
+def fill_from_contract_readings(
+    contract: dict,
+    periods: list[tuple[date, date]],
+    values: list[tuple[Decimal | None, str]],
+    readings: dict[str, str],
+) -> list[tuple[Decimal | None, str]]:
+    """Allocate an unmeasured remainder when only contract boundary readings exist.
+
+    Complete yearly statistics or yearly boundary readings remain authoritative.
+    Missing/partial years share the remaining contract kWh by calendar days and
+    are explicitly marked as estimates.
+    """
+    if not periods or periods[-1][1] != date.fromisoformat(contract["end"]) + timedelta(days=1):
+        return values  # No extrapolation for an ongoing contract.
+    left = readings.get(contract["start"])
+    right = readings.get(periods[-1][1].isoformat())
+    if left is None or right is None:
+        return values
+    total = Decimal(right) - Decimal(left)
+    if total < 0:
+        return [(None, "Endzählerstand liegt vor dem Anfangszählerstand") for _ in values]
+    unknown = [i for i, (_, status) in enumerate(values) if status not in ("Zählerstände", "Statistik")]
+    if not unknown:
+        return values
+    known = sum((value for i, (value, _) in enumerate(values) if i not in unknown and value is not None), Decimal(0))
+    remaining = total - known
+    if remaining < 0:
+        return [(None, "Ablesungen widersprechen der Statistik") if i in unknown else item for i, item in enumerate(values)]
+    days = sum((periods[i][1] - periods[i][0]).days for i in unknown)
+    output = list(values)
+    for i in unknown:
+        share = Decimal((periods[i][1] - periods[i][0]).days) / Decimal(days)
+        output[i] = (remaining * share, "Aus Endständen geschätzt")
+    return output
