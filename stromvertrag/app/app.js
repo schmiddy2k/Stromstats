@@ -11,6 +11,47 @@ let previewTimer;
 let previewSequence = 0;
 let previousBasePeriod = 'yearly';
 
+function syncThemeFromHomeAssistant() {
+  if (window.parent === window) return;
+  try {
+    const parentDocument = window.parent.document;
+    const themeRoot = parentDocument.querySelector('home-assistant') || parentDocument.documentElement;
+    const styles = window.parent.getComputedStyle(themeRoot);
+    for (const name of [
+      '--primary-color', '--accent-color', '--app-header-background-color', '--app-header-text-color',
+      '--primary-background-color', '--secondary-background-color', '--card-background-color',
+      '--ha-card-background', '--ha-card-border-radius', '--ha-card-box-shadow',
+      '--primary-text-color', '--secondary-text-color', '--text-primary-color',
+      '--divider-color', '--input-fill-color', '--error-color', '--warning-color', '--success-color',
+    ]) {
+      const value = styles.getPropertyValue(name).trim();
+      if (value) document.documentElement.style.setProperty(name, value);
+      else document.documentElement.style.removeProperty(name);
+    }
+    const colorScheme = styles.getPropertyValue('color-scheme').trim();
+    if (colorScheme) document.documentElement.style.colorScheme = colorScheme;
+  } catch {
+    // Embedded without same-origin access: use the local theme fallbacks.
+  }
+}
+
+function watchHomeAssistantTheme() {
+  syncThemeFromHomeAssistant();
+  if (window.parent === window) return;
+  try {
+    const parentDocument = window.parent.document;
+    const observer = new MutationObserver(syncThemeFromHomeAssistant);
+    observer.observe(parentDocument.documentElement, { attributes: true, attributeFilter: ['style', 'class'] });
+    const themeRoot = parentDocument.querySelector('home-assistant');
+    if (themeRoot) observer.observe(themeRoot, { attributes: true, attributeFilter: ['style', 'class'] });
+    window.addEventListener('pagehide', () => observer.disconnect(), { once: true });
+    window.addEventListener('focus', syncThemeFromHomeAssistant);
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', syncThemeFromHomeAssistant);
+  } catch {
+    // A cross-origin parent cannot expose its theme.
+  }
+}
+
 const euro = (value) => value == null ? '–' : new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR' }).format(value);
 const euroPerKwh = (value) => value == null ? '–' : new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(value) + '/kWh';
 const kwh = (value) => value == null ? '–' : new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(value) + ' kWh';
@@ -364,6 +405,7 @@ async function settings() {
 }
 
 async function start() {
+  watchHomeAssistantTheme();
   await settings();
   await Promise.all([entities(), load()]);
 }

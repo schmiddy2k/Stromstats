@@ -12,7 +12,7 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--primary-background-color, var(--app-background)); color: var(--primary-text-color, var(--app-text)); }
-.app-bar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; padding: 0 24px; background: var(--app-header-background-color, var(--primary-color, #03a9f4)); color: var(--text-primary-color, #fff); box-shadow: 0 2px 4px #0002; }
+.app-bar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; padding: 0 24px; background: var(--app-header-background-color, var(--primary-color, #03a9f4)); color: var(--app-header-text-color, var(--text-primary-color, #fff)); box-shadow: 0 2px 4px #0002; }
 .app-bar h1 { margin: 0; font-size: 1.25rem; font-weight: 500; }
 .app-bar button { background: transparent; color: inherit; }
 .app-bar button:hover { background: #ffffff20; filter: none; }
@@ -30,7 +30,7 @@ button:disabled { opacity: .5; }
 form { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 label { display: flex; flex-direction: column; gap: 6px; font-size: .875rem; }
 input, select { font: inherit; border: 1px solid var(--divider-color, var(--app-divider)); border-radius: 4px; padding: 9px 10px; background: var(--input-fill-color, var(--card-background-color, var(--app-card))); color: var(--primary-text-color, var(--app-text)); min-width: 0; height: 40px; }
-input:focus, select:focus { outline: 2px solid var(--primary-color, #03a9f4); outline-offset: 1px; }
+input:focus, select:focus { outline: 2px solid var(--accent-color, var(--primary-color, #03a9f4)); outline-offset: 1px; }
 form .wide { grid-column: span 2; }
 form .actions, fieldset { grid-column: 1 / -1; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -38,11 +38,11 @@ fieldset { border: 1px solid var(--divider-color, var(--app-divider)); border-ra
 legend { font-weight: 500; padding: 0 6px; }
 .boundary-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 12px; }
 .hidden { display: none; }
-.summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 16px; padding: 16px; border-radius: 8px; background: #eaf6fc; background: color-mix(in srgb, var(--primary-color, #03a9f4) 10%, var(--ha-card-background, var(--app-card))); }
+.summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 16px; padding: 16px; border-radius: 8px; background: var(--secondary-background-color, var(--app-background)); background: color-mix(in srgb, var(--accent-color, var(--primary-color, #03a9f4)) 10%, var(--ha-card-background, var(--app-card))); }
 .summary p { margin: 0; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .summary strong { font-size: .79rem; font-weight: 700; }
 .summary .summary-value { font-size: 1.04rem; font-weight: 600; overflow-wrap: anywhere; }
-.summary .settlement { border-left: 1px solid var(--divider-color, var(--app-divider)); padding-left: 12px; }
+.summary .settlement { border-left: 2px solid var(--accent-color, var(--primary-color, #03a9f4)); padding-left: 12px; }
 .summary .settlement .summary-value { color: var(--primary-text-color, var(--app-text)); }
 .summary-note { grid-column: 1 / -1; color: var(--secondary-text-color, var(--app-secondary)); font-size: .78rem; }
 .tablewrap { overflow: auto; margin-top: 18px; border: 1px solid var(--divider-color, var(--app-divider)); border-radius: 8px; }
@@ -86,7 +86,7 @@ tr:last-child td { border-bottom: 0; }
 .preview-grid div { min-width: 0; }
 .preview-grid dt { color: var(--secondary-text-color, var(--app-secondary)); font-size: .75rem; }
 .preview-grid dd { margin: 4px 0 0; font-weight: 600; }
-.preview-grid .effective dd { color: var(--primary-color, #03a9f4); }
+.preview-grid .effective dd { color: var(--accent-color, var(--primary-color, #03a9f4)); }
 .empty { text-align: center; padding: 42px 10px; }
 @media (prefers-color-scheme: dark) {
   :root { color-scheme: dark; --app-background: #111; --app-card: #1c1c1c; --app-text: #eee; --app-secondary: #aaa; --app-divider: #444; }
