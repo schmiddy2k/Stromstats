@@ -2,23 +2,26 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sqlite3
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from threading import Lock
+from threading import Event, Lock, Thread
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
 from model import calculate, consumption, fill_from_contract_readings, parse_date, preview_contract, sections, validate_contract
+import energy
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 DB = DATA_DIR / "contracts.sqlite3"
 LOCK = Lock()
+ENERGY_WAKE = Event()
 STATIC = Path(__file__).with_name("index.html")
 SCRIPT = Path(__file__).with_name("app.js")
 SUPERVISOR = os.environ.get("SUPERVISOR_URL", "http://supervisor")
@@ -52,6 +55,18 @@ def contracts():
     with database() as conn:
         result = [dict(id=row["id"], **json.loads(row["body"])) for row in conn.execute("SELECT id, body FROM contracts")]
     return sorted(result, key=lambda contract: (contract["start"], contract["id"]), reverse=True)
+
+
+def sync_energy_forever():
+    """Refresh after edits, contract date changes, and Home Assistant restarts."""
+    while True:
+        try:
+            tz_name = ha("GET", "/config").get("time_zone") or "Europe/Berlin"
+            energy.sync(contracts(), ha, datetime.now(ZoneInfo(tz_name)).date())
+        except Exception as exc:
+            logging.warning("Energy-Preissensor: %s", exc)
+        ENERGY_WAKE.wait(60)
+        ENERGY_WAKE.clear()
 
 
 def readings(contract_id: int):
@@ -213,6 +228,7 @@ class Handler(BaseHTTPRequestHandler):
                 cursor = conn.execute("INSERT INTO contracts(body) VALUES(?)", (json.dumps(body),))
                 save_boundaries(conn, cursor.lastrowid, updates)
                 self._send(201, {"id": cursor.lastrowid})
+            ENERGY_WAKE.set()
         elif self.command in ("PUT", "DELETE") and path.startswith("/api/contracts/"):
             contract_id = int(path.rsplit("/", 1)[1])
             with LOCK, database() as conn:
@@ -231,6 +247,7 @@ class Handler(BaseHTTPRequestHandler):
                     conn.execute("DELETE FROM readings WHERE contract_id=?", (contract_id,))
                     conn.execute("DELETE FROM contracts WHERE id=?", (contract_id,))
                 self._send(200, {"ok": True})
+            ENERGY_WAKE.set()
         elif self.command in ("PUT", "DELETE") and path.startswith("/api/readings/"):
             _, _, _, cid, day = path.split("/")
             contract_id = int(cid)
@@ -274,4 +291,5 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     with database(): pass
+    Thread(target=sync_energy_forever, daemon=True, name="energy-price-sync").start()
     ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("PORT", "8099"))), Handler).serve_forever()
