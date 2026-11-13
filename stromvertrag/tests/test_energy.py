@@ -90,6 +90,43 @@ class EnergyTest(unittest.TestCase):
         self.assertEqual([c for c in calls if c[1] == "/events/stromvertrag_price_update"][0][2]["price"], "0.31")
         self.assertEqual(websocket.call_args.args[0]["energy_sources"][0]["entity_energy_price"], energy.PRICE_ENTITY)
 
+    @patch.object(energy, "websocket_command")
+    @patch.object(energy, "options", return_value={})
+    def test_unavailable_registered_entity_receives_price(self, _options, websocket):
+        websocket.side_effect = [
+            [{"entity_id": energy.PRICE_ENTITY, "platform": "stromvertrag_price",
+              "unique_id": "stromvertrag_arbeitspreis"}],
+            {"energy_sources": [{"type": "grid", "stat_energy_from": "sensor.meter",
+                                 "entity_energy_price": energy.PRICE_ENTITY, "stat_cost": None}]},
+            {},
+        ]
+        calls = []
+        def ha(method, path, body=None):
+            calls.append((method, path, body))
+            if path == "/states":
+                return [{"entity_id": energy.PRICE_ENTITY, "state": "unavailable", "attributes": {}}]
+            if path.startswith("/config/config_entries/entry"):
+                return [{"domain": "stromvertrag_price"}]
+            return {}
+        contract = {"id": 7, "start": "2026-01-01", "end": "2026-12-31", "entity_id": "sensor.meter", "price_kwh": "0.31"}
+        status = energy.sync([contract], ha, date(2026, 5, 1))
+        self.assertIn("zugeordnet", status)
+        self.assertEqual([c for c in calls if c[1] == "/events/stromvertrag_price_update"][0][2]["price"], "0.31")
+
+    @patch.object(energy, "websocket_command", return_value=[
+        {"entity_id": energy.PRICE_ENTITY, "platform": "other_platform", "unique_id": "other"}])
+    @patch.object(energy, "options", return_value={})
+    def test_unavailable_foreign_entity_is_not_overwritten(self, _options, websocket):
+        calls = []
+        def ha(method, path, body=None):
+            calls.append((method, path, body))
+            if path == "/states":
+                return [{"entity_id": energy.PRICE_ENTITY, "state": "unavailable", "attributes": {}}]
+            raise AssertionError(path)
+        with self.assertRaisesRegex(RuntimeError, "anderen Quelle"):
+            energy.sync([], ha, date(2026, 5, 1))
+        self.assertFalse(any(path == "/events/stromvertrag_price_update" for _, path, _ in calls))
+
 
 if __name__ == "__main__":
     unittest.main()

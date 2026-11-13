@@ -115,6 +115,13 @@ def websocket_command(command: dict, timeout: int = 15) -> dict:
         connection.close()
 
 
+def registered_price_entity() -> bool:
+    """Unavailable entities omit custom state attributes; use the registry."""
+    entries = websocket_command({"type": "config/entity_registry/list"})
+    return any(entry.get("entity_id") == PRICE_ENTITY and entry.get("platform") == "stromvertrag_price"
+               and entry.get("unique_id") == "stromvertrag_arbeitspreis" for entry in entries)
+
+
 def sync(contracts: list[dict], ha, today: date) -> str:
     settings = options()
     name = str(settings.get("price_sensor_name") or "Stromvertrag Arbeitspreis").strip()[:100]
@@ -129,7 +136,7 @@ def sync(contracts: list[dict], ha, today: date) -> str:
     if source == "stromvertrag":
         ha("DELETE", "/states/" + PRICE_ENTITY)
         existing = None
-    elif existing and source != "stromvertrag_price":
+    elif existing and source != "stromvertrag_price" and not registered_price_entity():
         raise RuntimeError(f"{PRICE_ENTITY} ist bereits von einer anderen Quelle belegt")
     entries = ha("GET", "/config/config_entries/entry?domain=stromvertrag_price")
     if not entries:

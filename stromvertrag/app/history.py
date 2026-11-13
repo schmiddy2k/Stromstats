@@ -22,6 +22,16 @@ def _rows(statistic_id: str, start: datetime, end: datetime, types: list[str], u
     return result.get(statistic_id, [])
 
 
+def _meter_rows(ha, statistic_id: str, start: datetime, end: datetime) -> list[dict]:
+    """Use the same Recorder service as the contract report for meter changes."""
+    result = ha("POST", "/services/recorder/get_statistics?return_response", {
+        "start_time": start.isoformat(), "end_time": end.isoformat(),
+        "statistic_ids": [statistic_id], "period": "hour", "types": ["change"],
+        "units": {"energy": "kWh"},
+    })
+    return result["service_response"]["statistics"].get(statistic_id, [])
+
+
 def build_plan(contracts: list[dict], ha, today: date) -> dict:
     """Use completed local days only; require every corresponding meter hour."""
     config = ha("GET", "/config")
@@ -51,9 +61,11 @@ def build_plan(contracts: list[dict], ha, today: date) -> dict:
     hours = int((end - start).total_seconds() // 3600)
     if hours < 1 or hours > MAX_HOURS:
         raise ValueError("Die Rückrechnung umfasst höchstens drei Jahre")
-    meter_rows = _rows(meter, start, end, ["change"], {"energy": "kWh"})
+    meter_rows = _meter_rows(ha, meter, start, end)
+    if not meter_rows:
+        raise ValueError(f"Für {meter} liegen zwischen {relevant[0]['start']} und {today.isoformat()} keine stündlichen Verbrauchsstatistiken vor")
     cost_rows = _rows(cost_id, start - timedelta(hours=1), datetime.now(timezone.utc), ["change", "sum", "state", "last_reset"])
-    meter_by_hour = {int(row["start"] / 1000): row for row in meter_rows}
+    meter_by_hour = {int(datetime.fromisoformat(row["start"]).timestamp()): row for row in meter_rows}
     cost_by_hour = {int(row["start"] / 1000): row for row in cost_rows}
     metadata_list = websocket_command({"type": "recorder/get_statistics_metadata", "statistic_ids": [cost_id]})
     metadata = metadata_list[0] if metadata_list else None

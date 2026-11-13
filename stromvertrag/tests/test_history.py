@@ -12,7 +12,7 @@ class HistoryTest(unittest.TestCase):
     def _plan(self, missing=False, priced_hours=False):
         start = datetime(2026, 1, 1, tzinfo=timezone.utc)
         end = start + timedelta(hours=48)
-        meter_rows = [{"start": int((start + timedelta(hours=n)).timestamp() * 1000), "change": 1}
+        meter_rows = [{"start": (start + timedelta(hours=n)).isoformat(), "change": 1}
                       for n in range(48 if not missing else 47)]
         cost_rows = ([{"start": int((start + timedelta(hours=n)).timestamp() * 1000),
                        "sum": (n + 1) * 0.1, "change": 0.1, "state": (n + 1) * 0.1}
@@ -33,12 +33,19 @@ class HistoryTest(unittest.TestCase):
             raise AssertionError(command)
 
         def rows(statistic_id, *_args):
-            return meter_rows if statistic_id == "sensor.meter" else cost_rows
+            return cost_rows
+
+        def ha(_method, path, _body=None):
+            if path == "/config":
+                return {"currency": "EUR", "time_zone": "UTC"}
+            if path.startswith("/services/recorder/get_statistics"):
+                return {"service_response": {"statistics": {"sensor.meter": meter_rows}}}
+            raise AssertionError(path)
 
         contract = {"id": 1, "start": "2026-01-01", "end": "2026-12-31",
                     "entity_id": "sensor.meter", "price_kwh": "0.30"}
         with patch.object(history, "websocket_command", side_effect=ws), patch.object(history, "_rows", side_effect=rows):
-            return history.build_plan([contract], lambda *_: {"currency": "EUR", "time_zone": "UTC"}, date(2026, 1, 3))
+            return history.build_plan([contract], ha, date(2026, 1, 3))
 
     def test_preview_calculates_past_hours_without_writing(self):
         plan = self._plan()
