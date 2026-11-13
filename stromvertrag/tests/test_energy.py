@@ -45,6 +45,16 @@ class EnergyTest(unittest.TestCase):
         self.assertEqual(updated[1]["entity_energy_price"], energy.PRICE_ENTITY)
         self.assertIsNone(energy.linked_sources(prefs, None)[0][0]["entity_energy_price"])
 
+    def test_legacy_grid_connection_is_found(self):
+        prefs = {"energy_sources": [{"type": "grid", "flow_from": [
+            {"stat_energy_from": "sensor.meter", "stat_cost": None, "number_energy_price": 0.35},
+        ], "flow_to": []}]}
+        updated, changed = energy.linked_sources(prefs, "sensor.meter")
+        self.assertTrue(changed)
+        self.assertEqual(updated[0]["flow_from"][0]["entity_energy_price"], energy.PRICE_ENTITY)
+        self.assertEqual(energy.link_status(updated, "sensor.meter"), "Preissensor der passenden Grid Connection zugeordnet")
+        self.assertIn("nicht als Netzbezug", energy.link_status(updated, "sensor.other"))
+
     @patch.object(energy, "websocket_command")
     @patch.object(energy, "options", return_value={})
     def test_sync_publishes_price_then_links_meter(self, _options, websocket):

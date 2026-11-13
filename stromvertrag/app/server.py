@@ -22,6 +22,8 @@ DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 DB = DATA_DIR / "contracts.sqlite3"
 LOCK = Lock()
 ENERGY_WAKE = Event()
+ENERGY_LOCK = Lock()
+ENERGY_STATUS = {"message": "Energy-Zuordnung noch nicht geprüft", "entity_id": energy.PRICE_ENTITY}
 STATIC = Path(__file__).with_name("index.html")
 SCRIPT = Path(__file__).with_name("app.js")
 SUPERVISOR = os.environ.get("SUPERVISOR_URL", "http://supervisor")
@@ -57,14 +59,22 @@ def contracts():
     return sorted(result, key=lambda contract: (contract["start"], contract["id"]), reverse=True)
 
 
+def sync_energy_once():
+    with ENERGY_LOCK:
+        try:
+            tz_name = ha("GET", "/config").get("time_zone") or "Europe/Berlin"
+            message = energy.sync(contracts(), ha, datetime.now(ZoneInfo(tz_name)).date())
+        except Exception as exc:
+            message = f"Energy-Zuordnung fehlgeschlagen: {exc}"
+            logging.warning("%s", message)
+        ENERGY_STATUS.update(message=message, checked_at=datetime.now().isoformat(timespec="seconds"))
+        return dict(ENERGY_STATUS)
+
+
 def sync_energy_forever():
     """Refresh after edits, contract date changes, and Home Assistant restarts."""
     while True:
-        try:
-            tz_name = ha("GET", "/config").get("time_zone") or "Europe/Berlin"
-            energy.sync(contracts(), ha, datetime.now(ZoneInfo(tz_name)).date())
-        except Exception as exc:
-            logging.warning("Energy-Preissensor: %s", exc)
+        sync_energy_once()
         ENERGY_WAKE.wait(60)
         ENERGY_WAKE.clear()
 
@@ -209,6 +219,12 @@ class Handler(BaseHTTPRequestHandler):
             config = ha("GET", "/config")
             tz = ZoneInfo(config.get("time_zone") or "Europe/Berlin")
             self._send(200, {"language": config.get("language") or "de", "today": datetime.now(tz).date().isoformat()})
+        elif self.command == "GET" and path == "/api/energy/status":
+            self._send(200, dict(ENERGY_STATUS))
+        elif self.command == "POST" and path == "/api/energy/sync":
+            if self.headers.get("X-Requested-With") != "Stromvertrag":
+                raise ValueError("Ungültige Anfrage")
+            self._send(200, sync_energy_once())
         elif self.command == "POST" and path == "/api/preview":
             self._send(200, preview_contract(self._json()))
         elif self.command == "GET" and path == "/api/entities":

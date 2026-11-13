@@ -459,8 +459,19 @@ form.onsubmit = async (event) => {
 };
 
 async function load() {
-  try { items = await api('report'); render(); }
+  try { items = await api('report'); render(); await energyStatus(); }
   catch (error) { notice(error.message); }
+}
+
+async function energyStatus(refresh = false) {
+  const button = $('#energy-sync');
+  if (refresh) button.disabled = true;
+  try {
+    const result = await api(refresh ? 'energy/sync' : 'energy/status', refresh ? 'POST' : 'GET');
+    $('#energy-status').textContent = `${result.message} · ${result.entity_id}`;
+  } catch (error) {
+    $('#energy-status').textContent = `Energy-Zuordnung konnte nicht geprüft werden: ${error.message}`;
+  } finally { button.disabled = false; }
 }
 
 async function entities() {
@@ -487,6 +498,7 @@ async function settings() {
 
 async function start() {
   watchHomeAssistantTheme();
+  $('#energy-sync').addEventListener('click', () => energyStatus(true));
   await settings();
   await Promise.all([entities(), load()]);
 }
