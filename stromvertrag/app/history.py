@@ -5,7 +5,7 @@ import hashlib
 import json
 import time as clock
 from datetime import date, datetime, time, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo
 
 from energy import active_contract, grid_imports, websocket_command
@@ -33,7 +33,7 @@ def _meter_rows(ha, statistic_id: str, start: datetime, end: datetime) -> list[d
 
 
 def build_plan(contracts: list[dict], ha, today: date) -> dict:
-    """Use completed local days only; require every corresponding meter hour."""
+    """Price recorded hours inside each started contract's completed days."""
     config = ha("GET", "/config")
     if config.get("currency") != "EUR":
         raise ValueError("Historische Kosten benötigen die Home-Assistant-Währung EUR")
@@ -56,16 +56,36 @@ def build_plan(contracts: list[dict], ha, today: date) -> dict:
     for previous, current in zip(relevant, relevant[1:]):
         if previous["end"] >= current["start"]:
             raise ValueError("Vertragszeiträume für den Strommesssensor überschneiden sich")
-    start = datetime.combine(date.fromisoformat(relevant[0]["start"]), time.min, tz).astimezone(timezone.utc)
-    end = datetime.combine(today, time.min, tz).astimezone(timezone.utc)
-    hours = int((end - start).total_seconds() // 3600)
-    if hours < 1 or hours > MAX_HOURS:
+    periods = []
+    for contract in relevant:
+        start_local = date.fromisoformat(contract["start"])
+        end_local = min(date.fromisoformat(contract["end"]) + timedelta(days=1), today)
+        if end_local > start_local:
+            periods.append((contract,
+                            datetime.combine(start_local, time.min, tz).astimezone(timezone.utc),
+                            datetime.combine(end_local, time.min, tz).astimezone(timezone.utc)))
+    if not periods:
+        raise ValueError("Noch keine abgeschlossenen Vertragsstunden")
+    start = periods[0][1]
+    end = periods[-1][2]
+    if sum(int((stop - begin).total_seconds() // 3600) for _, begin, stop in periods) > MAX_HOURS:
         raise ValueError("Die Rückrechnung umfasst höchstens drei Jahre")
-    meter_rows = _meter_rows(ha, meter, start, end)
-    if not meter_rows:
-        raise ValueError(f"Für {meter} liegen zwischen {relevant[0]['start']} und {today.isoformat()} keine stündlichen Verbrauchsstatistiken vor")
+    meter_by_hour = {}
+    contract_by_hour = {}
+    summaries = []
+    for contract, begin, stop in periods:
+        rows = _meter_rows(ha, meter, begin, stop)
+        for row in rows:
+            timestamp = int(datetime.fromisoformat(row["start"]).timestamp())
+            if int(begin.timestamp()) <= timestamp < int(stop.timestamp()):
+                meter_by_hour[timestamp] = row
+        for timestamp in range(int(begin.timestamp()), int(stop.timestamp()), 3600):
+            contract_by_hour[timestamp] = contract
+        summaries.append({"id": contract["id"], "provider": contract.get("provider", ""),
+                          "tariff": contract.get("tariff", ""),
+                          "start_date": contract["start"], "end_date": (stop.astimezone(tz).date() - timedelta(days=1)).isoformat(),
+                          "hours": 0, "skipped_hours": 0, "kwh": 0.0, "calculated_cost": 0.0})
     cost_rows = _rows(cost_id, start - timedelta(hours=1), datetime.now(timezone.utc), ["change", "sum", "state", "last_reset"])
-    meter_by_hour = {int(datetime.fromisoformat(row["start"]).timestamp()): row for row in meter_rows}
     cost_by_hour = {int(row["start"] / 1000): row for row in cost_rows}
     metadata_list = websocket_command({"type": "recorder/get_statistics_metadata", "statistic_ids": [cost_id]})
     metadata = metadata_list[0] if metadata_list else None
@@ -82,50 +102,50 @@ def build_plan(contracts: list[dict], ha, today: date) -> dict:
     delta = Decimal(0)
     expected = Decimal(0)
     previous = Decimal(0)
-    missing = 0
+    skipped = 0
+    measured = 0
     calculated = []
-    contract_by_day = {}
-    for contract in relevant:
-        cursor = date.fromisoformat(contract["start"])
-        last = min(date.fromisoformat(contract["end"]), today - timedelta(days=1))
-        while cursor <= last:
-            contract_by_day[cursor] = contract
-            cursor += timedelta(days=1)
-    for offset in range(hours):
-        timestamp = int(start.timestamp()) + offset * 3600
+    summary_by_id = {item["id"]: item for item in summaries}
+    timeline = sorted(set(contract_by_hour) | {ts for ts in cost_by_hour if int(start.timestamp()) <= ts < int(end.timestamp())})
+    for timestamp in timeline:
         moment = datetime.fromtimestamp(timestamp, timezone.utc)
-        contract = contract_by_day.get(moment.astimezone(tz).date())
+        contract = contract_by_hour.get(timestamp)
         old = cost_by_hour.get(timestamp)
         meter_row = meter_by_hour.get(timestamp)
         if old and old.get("sum") is not None:
             old_sum = Decimal(str(old["sum"]))
+        usable = False
         if contract:
-            if not meter_row or meter_row.get("change") is None:
-                missing += 1
-                continue
-            kwh = Decimal(str(meter_row["change"]))
-            if not kwh.is_finite() or kwh < 0:
-                missing += 1
-                continue
-            desired = kwh * Decimal(contract["price_kwh"])
-            actual = Decimal(str(old.get("change") or 0)) if old else Decimal(0)
-            if not desired.is_finite() or not actual.is_finite():
-                missing += 1
-                continue
-            expected += desired
-            previous += actual
-            delta += desired - actual
-        if contract or old:
+            raw_change = meter_row.get("change") if meter_row else None
+            try:
+                kwh = Decimal(str(raw_change)) if raw_change is not None else None
+                actual = Decimal(str(old.get("change") or 0)) if old else Decimal(0)
+            except (InvalidOperation, ValueError, TypeError):
+                kwh, actual = None, Decimal(0)
+            if kwh is None or not kwh.is_finite() or kwh < 0 or not actual.is_finite():
+                skipped += 1
+                summary_by_id[contract["id"]]["skipped_hours"] += 1
+            else:
+                usable = True
+                desired = kwh * Decimal(contract["price_kwh"])
+                expected += desired
+                previous += actual
+                delta += desired - actual
+                measured += 1
+                item = summary_by_id[contract["id"]]
+                item["hours"] += 1
+                item["kwh"] += float(kwh)
+                item["calculated_cost"] += float(desired)
+        # Existing cost rows in gaps only carry earlier sum adjustments forward.
+        if old or usable:
             new_sum = old_sum + delta
             row = {"start": moment.isoformat(), "sum": float(new_sum),
                    "state": old.get("state") if old and old.get("state") is not None else float(new_sum)}
             if old and old.get("last_reset") is not None:
                 row["last_reset"] = datetime.fromtimestamp(old["last_reset"] / 1000, timezone.utc).isoformat()
             calculated.append(row)
-    if missing:
-        raise ValueError(f"{missing} Vertragsstunden ohne vollständige Verbrauchsstatistik; Rückrechnung abgebrochen")
-    if not calculated:
-        raise ValueError("Keine berechenbaren historischen Stunden")
+    if not measured:
+        raise ValueError(f"Für {meter} liegen in den gestarteten Vertragszeiträumen keine auswertbaren stündlichen Verbrauchsstatistiken vor")
     target_metadata = {"mean_type": metadata.get("mean_type", 0) if metadata else 0,
                        "has_sum": True, "name": metadata.get("name") if metadata else None,
                        "source": "recorder", "statistic_id": cost_id,
@@ -135,8 +155,9 @@ def build_plan(contracts: list[dict], ha, today: date) -> dict:
                                              "delta": str(delta), "contracts": relevant}, sort_keys=True).encode()).hexdigest()
     return {"token": fingerprint, "meter": meter, "cost_statistic_id": cost_id,
             "start": start.isoformat(), "end": end.isoformat(),
-            "start_date": relevant[0]["start"], "end_date": today.isoformat(), "hours": len(calculated),
-            "contract_count": len(relevant), "existing_cost": float(previous),
+            "start_date": periods[0][0]["start"], "end_date": summaries[-1]["end_date"], "hours": measured,
+            "skipped_hours": skipped, "contracts": summaries,
+            "contract_count": len(periods), "existing_cost": float(previous),
             "calculated_cost": float(expected), "adjustment": float(delta),
             "metadata": target_metadata, "rows": calculated,
             "future_time": datetime.fromtimestamp(future_time, timezone.utc).isoformat(),

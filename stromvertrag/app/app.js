@@ -347,6 +347,24 @@ function render() {
     );
     card.append(facts);
 
+    if (contract.recorder) {
+      const recorder = contract.recorder;
+      const details = node('details', '', 'year-details');
+      const trigger = node('summary', '', 'year-details-toggle');
+      trigger.append(node('span', 'Recorder-Daten'), node('span', `${recorder.hours} von ${recorder.expected_hours} Stunden`, 'year-count'), icon('expand'));
+      details.append(trigger);
+      const content = node('div', '', 'recorder-details');
+      content.append(node('p', `Sensor: ${recorder.sensor}`, 'hint'));
+      if (recorder.error) content.append(node('p', recorder.error, 'hint'));
+      content.append(node('p', `Erfasster Verbrauch: ${kwh(recorder.kwh)} · Fehlende Stunden: ${recorder.missing_hours}`, 'hint'));
+      if (recorder.first_hour && recorder.last_hour) {
+        const format = (value) => new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+        content.append(node('p', `Erste Stunde: ${format(recorder.first_hour)} · Letzte Stunde: ${format(recorder.last_hour)}`, 'hint'));
+      }
+      details.append(content);
+      card.append(details);
+    }
+
     const tableWrap = node('div', '', 'tablewrap');
     const table = node('table');
     const header = node('tr');
@@ -484,7 +502,9 @@ async function historyPreview() {
   try {
     const result = await api('energy/history/preview');
     historyToken = result.token;
-    $('#history-result').textContent = `${displayDate(result.start_date)} bis ${displayDate(result.end_date)}: ${result.hours} Stunden, ${result.contract_count} Verträge. Bisher ${euro(result.existing_cost)}, laut Arbeitspreisen ${euro(result.calculated_cost)}; Korrektur ${euro(result.adjustment)}. Kostenstatistik: ${result.cost_statistic_id}.`;
+    const headline = `${displayDate(result.start_date)} bis ${displayDate(result.end_date)}: ${result.hours} berechenbare Stunden, ${result.skipped_hours} ohne Verbrauchswert übersprungen. Bisher ${euro(result.existing_cost)}, laut Arbeitspreisen ${euro(result.calculated_cost)}; Korrektur ${euro(result.adjustment)}. Kostenstatistik: ${result.cost_statistic_id}.`;
+    const contracts = result.contracts.map((contract) => `${contract.provider || contract.tariff || 'Vertrag ' + contract.id} (${displayDate(contract.start_date)} – ${displayDate(contract.end_date)}): ${contract.hours} Stunden, ${contract.skipped_hours} übersprungen, ${kwh(contract.kwh)}, ${euro(contract.calculated_cost)}`).join('\n');
+    $('#history-result').textContent = headline + '\n' + contracts;
     if (Math.abs(result.adjustment) >= 0.000001) $('#history-apply').classList.remove('hidden');
   } catch (error) { $('#history-result').textContent = error.message; }
   finally { button.disabled = false; }

@@ -5,7 +5,7 @@ import json
 import logging
 import os
 import sqlite3
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -161,6 +161,31 @@ def save_boundaries(conn, contract_id: int, updates: dict[str, str | None]):
             conn.execute("INSERT OR REPLACE INTO readings VALUES(?,?,?)", (contract_id, day, value))
 
 
+def recorder_summary(rows: list[dict], sensor: str, start: date, end: date, tz: ZoneInfo, error: str | None = None) -> dict:
+    """Summarize recorded, completed contract hours without changing app totals."""
+    beginning = datetime.combine(start, time.min, tz).astimezone(timezone.utc)
+    cutoff = min(datetime.combine(end, time.min, tz).astimezone(timezone.utc),
+                 datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0))
+    expected = max(0, int((cutoff - beginning).total_seconds() // 3600))
+    values = {}
+    for row in rows:
+        moment = datetime.fromisoformat(row["start"]).astimezone(timezone.utc)
+        if not beginning <= moment < cutoff or row.get("change") is None:
+            continue
+        try:
+            change = Decimal(str(row["change"]))
+        except InvalidOperation:
+            continue
+        if change.is_finite() and change >= 0:
+            values[moment] = change
+    times = sorted(values)
+    return {"sensor": sensor, "expected_hours": expected, "hours": len(times),
+            "missing_hours": max(0, expected - len(times)),
+            "kwh": float(sum(values.values(), Decimal(0))),
+            "first_hour": times[0].isoformat() if times else None,
+            "last_hour": times[-1].isoformat() if times else None, "error": error}
+
+
 def report():
     tz_name = ha("GET", "/config").get("time_zone", "Europe/Berlin")
     tz = ZoneInfo(tz_name)
@@ -168,9 +193,8 @@ def report():
     for contract in contracts():
         periods = sections(contract, datetime.now(tz).date())
         if not periods:
-            output.append({**contract, "readings": readings(contract["id"]), "years": []})
+            output.append({**contract, "readings": readings(contract["id"]), "years": [], "recorder": None})
             continue
-        from datetime import time
         first, last = periods[0][0], periods[-1][1]
         payload = {"start_time": datetime.combine(first, time.min, tz).isoformat(), "end_time": datetime.combine(last, time.min, tz).isoformat(),
                    "statistic_ids": [contract["entity_id"]], "period": "hour", "types": ["change"], "units": {"energy": "kWh"}}
@@ -197,7 +221,8 @@ def report():
             measured.append((kwh, status))
         measured = fill_from_contract_readings(contract, periods, measured, manual)
         years = [calculate(contract, start, end, kwh, status) for (start, end), (kwh, status) in zip(periods, measured)]
-        output.append({**contract, "readings": manual, "years": years})
+        recorder = recorder_summary(rows, contract["entity_id"], first, last, tz, error) if contract.get("entity_id") else None
+        output.append({**contract, "readings": manual, "years": years, "recorder": recorder})
     return output
 
 

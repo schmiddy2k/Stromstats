@@ -2,8 +2,10 @@ import sys
 import tempfile
 import unittest
 import json
+from datetime import date
 from pathlib import Path
 from unittest.mock import Mock, patch
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 import server
@@ -11,6 +13,19 @@ from model import validate_contract
 
 
 class ReportTest(unittest.TestCase):
+    def test_recorder_details_count_only_valid_contract_hours(self):
+        rows = [
+            {"start": "2025-01-01T00:00:00+00:00", "change": 1.5},
+            {"start": "2025-01-01T01:00:00+00:00", "change": None},
+            {"start": "2025-01-01T02:00:00+00:00", "change": -1},
+            {"start": "2025-01-02T00:00:00+00:00", "change": 99},
+        ]
+        summary = server.recorder_summary(rows, "sensor.energy", date(2025, 1, 1), date(2025, 1, 2), ZoneInfo("UTC"))
+        self.assertEqual(summary["expected_hours"], 24)
+        self.assertEqual(summary["hours"], 1)
+        self.assertEqual(summary["missing_hours"], 23)
+        self.assertEqual(summary["kwh"], 1.5)
+
     def test_frontend_script_is_served_through_ingress(self):
         handler = server.Handler.__new__(server.Handler)
         handler.client_address = ("172.30.32.2", 1234)

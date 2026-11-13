@@ -56,6 +56,9 @@ legend { font-size: 1rem; font-weight: 600; padding: 0 8px; }
 .year-details-toggle svg { width: 20px; height: 20px; fill: currentColor; color: var(--secondary-text-color, var(--app-secondary)); transition: transform .15s ease; }
 .year-details[open] .year-details-toggle svg { transform: rotate(180deg); }
 .year-details[open] .year-details-toggle { border-bottom: 1px solid var(--divider-color, var(--app-divider)); }
+.recorder-details { padding: 8px 14px 14px; overflow-wrap: anywhere; }
+.recorder-details p { margin: 5px 0; }
+#history-result { white-space: pre-line; }
 .tablewrap { overflow: auto; }
 table { border-collapse: collapse; width: 100%; white-space: nowrap; font-size: .84rem; }
 thead { background: var(--secondary-background-color, var(--app-background)); }
@@ -120,7 +123,7 @@ tr:last-child td { border-bottom: 0; }
 </style></head><body><header class="app-bar"><h1>Stromverträge</h1><button id="new" type="button">＋ Vertrag hinzufügen</button></header><main>
 <div id="notice" class="hidden"></div>
 <section class="card" aria-live="polite"><h2>Energy Dashboard</h2><p id="energy-status" class="muted">Zuordnung wird geprüft …</p><button id="energy-sync" type="button" class="secondary">Grid Connections prüfen und zuordnen</button>
-<h3>Vergangene Arbeitspreiskosten</h3><p class="hint">Nur auf Anforderung: Die App berechnet abgeschlossene Stunden aus Verbrauch und Vertragspreis und korrigiert danach Home Assistants Kostenstatistik. Grundgebühr und Boni bleiben in der App-Auswertung. Vor dem Anwenden ein Home-Assistant-Backup erstellen.</p>
+<h3>Vergangene Arbeitspreiskosten</h3><p class="hint">Nur auf Anforderung: Die App berechnet erfasste, abgeschlossene Stunden innerhalb jedes begonnenen Vertrags mit dessen Arbeitspreis. Fehlende Stunden werden übersprungen. Erst beim Anwenden wird Home Assistants Kostenstatistik korrigiert. Grundgebühr und Boni bleiben in der App-Auswertung. Vor dem Anwenden ein Home-Assistant-Backup erstellen.</p>
 <button id="history-preview" type="button" class="secondary">Rückrechnung prüfen</button><div id="history-result" class="hint" aria-live="polite"></div><button id="history-apply" type="button" class="secondary hidden">Angezeigte Korrektur anwenden</button></section>
 <section id="editor" class="card editor hidden"><h2 id="editor-title">Vertrag anlegen</h2><form id="form">
 <fieldset class="form-section"><legend>Vertragsdaten</legend><div class="form-grid">
