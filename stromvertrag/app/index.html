@@ -119,7 +119,9 @@ tr:last-child td { border-bottom: 0; }
 @media (max-width: 460px) { .editor { padding: 16px; } .form-section { padding: 14px; } .form-grid { grid-template-columns: 1fr; } form .wide { grid-column: span 1; } .preview-grid { grid-template-columns: 1fr; } .summary { grid-template-columns: 1fr; } .collapsed-details { grid-template-columns: 1fr; } }
 </style></head><body><header class="app-bar"><h1>Stromverträge</h1><button id="new" type="button">＋ Vertrag hinzufügen</button></header><main>
 <div id="notice" class="hidden"></div>
-<section class="card" aria-live="polite"><h2>Energy Dashboard</h2><p id="energy-status" class="muted">Zuordnung wird geprüft …</p><button id="energy-sync" type="button" class="secondary">Grid Connections prüfen und zuordnen</button></section>
+<section class="card" aria-live="polite"><h2>Energy Dashboard</h2><p id="energy-status" class="muted">Zuordnung wird geprüft …</p><button id="energy-sync" type="button" class="secondary">Grid Connections prüfen und zuordnen</button>
+<h3>Vergangene Arbeitspreiskosten</h3><p class="hint">Nur auf Anforderung: Die App berechnet abgeschlossene Stunden aus Verbrauch und Vertragspreis und korrigiert danach Home Assistants Kostenstatistik. Grundgebühr und Boni bleiben in der App-Auswertung. Vor dem Anwenden ein Home-Assistant-Backup erstellen.</p>
+<button id="history-preview" type="button" class="secondary">Rückrechnung prüfen</button><div id="history-result" class="hint" aria-live="polite"></div><button id="history-apply" type="button" class="secondary hidden">Angezeigte Korrektur anwenden</button></section>
 <section id="editor" class="card editor hidden"><h2 id="editor-title">Vertrag anlegen</h2><form id="form">
 <fieldset class="form-section"><legend>Vertragsdaten</legend><div class="form-grid">
 <label class="wide">Anbieter<input name="provider" required></label><label class="wide">Tarif<input name="tariff" required></label>

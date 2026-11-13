@@ -10,6 +10,7 @@ let readingChanges = {};
 let previewTimer;
 let previewSequence = 0;
 let previousBasePeriod = 'yearly';
+let historyToken = null;
 const collapsedContracts = new Set();
 
 function syncThemeFromHomeAssistant() {
@@ -474,6 +475,44 @@ async function energyStatus(refresh = false) {
   } finally { button.disabled = false; }
 }
 
+async function historyPreview() {
+  const button = $('#history-preview');
+  button.disabled = true;
+  historyToken = null;
+  $('#history-apply').classList.add('hidden');
+  $('#history-result').textContent = 'Verbrauchs- und Kostenstatistiken werden geprüft …';
+  try {
+    const result = await api('energy/history/preview');
+    historyToken = result.token;
+    $('#history-result').textContent = `${displayDate(result.start_date)} bis ${displayDate(result.end_date)}: ${result.hours} Stunden, ${result.contract_count} Verträge. Bisher ${euro(result.existing_cost)}, laut Arbeitspreisen ${euro(result.calculated_cost)}; Korrektur ${euro(result.adjustment)}. Kostenstatistik: ${result.cost_statistic_id}.`;
+    if (Math.abs(result.adjustment) >= 0.000001) $('#history-apply').classList.remove('hidden');
+  } catch (error) { $('#history-result').textContent = error.message; }
+  finally { button.disabled = false; }
+}
+
+async function historyApply() {
+  if (!historyToken) return;
+  if (!confirm('Die angezeigte Korrektur in Home Assistants Energy-Kostenstatistik übernehmen?')) return;
+  const button = $('#history-apply');
+  button.disabled = true;
+  try {
+    await api('energy/history/apply', 'POST', { token: historyToken });
+    button.classList.add('hidden');
+    $('#history-result').textContent = 'Korrekturlauf gestartet. Der Status wird angezeigt, sobald Home Assistant die Daten übernommen hat.';
+    await historyStatus();
+  } catch (error) {
+    $('#history-result').textContent = error.message;
+    button.disabled = false;
+  }
+}
+
+async function historyStatus() {
+  const result = await api('energy/history/status');
+  if (result.status === 'none') return;
+  $('#history-result').textContent = result.detail;
+  if (result.status === 'running') setTimeout(() => historyStatus().catch((error) => { $('#history-result').textContent = error.message; }), 3000);
+}
+
 async function entities() {
   try {
     const list = await api('entities');
@@ -499,7 +538,10 @@ async function settings() {
 async function start() {
   watchHomeAssistantTheme();
   $('#energy-sync').addEventListener('click', () => energyStatus(true));
+  $('#history-preview').addEventListener('click', historyPreview);
+  $('#history-apply').addEventListener('click', historyApply);
   await settings();
   await Promise.all([entities(), load()]);
+  await historyStatus().catch(() => {});
 }
 start();

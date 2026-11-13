@@ -6,9 +6,28 @@ import os
 from copy import deepcopy
 from datetime import date
 from pathlib import Path
+from shutil import copy2
 
 PRICE_ENTITY = "sensor.stromvertrag_arbeitspreis"
 OPTIONS = Path(os.environ.get("DATA_DIR", "/data")) / "options.json"
+INTEGRATION_SOURCE = Path("/integration/stromvertrag_price")
+INTEGRATION_TARGET = Path("/homeassistant/custom_components/stromvertrag_price")
+INTEGRATION_FILES = ("manifest.json", "__init__.py", "config_flow.py", "sensor.py", "strings.json")
+
+
+def install_integration() -> bool:
+    """Install only this app's component; Home Assistant loads it after a restart."""
+    if not INTEGRATION_SOURCE.is_dir() or not INTEGRATION_TARGET.parent.parent.is_dir():
+        return False
+    INTEGRATION_TARGET.mkdir(parents=True, exist_ok=True)
+    changed = False
+    for name in INTEGRATION_FILES:
+        source, target = INTEGRATION_SOURCE / name, INTEGRATION_TARGET / name
+        content = source.read_bytes()
+        if not target.exists() or target.read_bytes() != content:
+            copy2(source, target)
+            changed = True
+    return changed
 
 
 def options() -> dict:
@@ -67,13 +86,16 @@ def link_status(sources: list[dict], meter: str | None) -> str:
     return "Preissensor der passenden Grid Connection zugeordnet" if flow.get("entity_energy_price") == PRICE_ENTITY else "Preiszuordnung noch ausstehend"
 
 
-def websocket_command(command: dict) -> dict:
+def websocket_command(command: dict, timeout: int = 15) -> dict:
     # The Supervisor proxy authenticates WebSocket commands with its app token.
-    from websocket import create_connection
+    from websocket import WebSocketException, create_connection
 
     supervisor = os.environ.get("SUPERVISOR_URL", "http://supervisor")
     url = supervisor.replace("http://", "ws://", 1).replace("https://", "wss://", 1) + "/core/websocket"
-    connection = create_connection(url, timeout=15)
+    try:
+        connection = create_connection(url, timeout=timeout)
+    except (OSError, WebSocketException) as exc:
+        raise RuntimeError(f"Home Assistant WebSocket nicht erreichbar: {exc}") from exc
     try:
         if json.loads(connection.recv()).get("type") != "auth_required":
             raise RuntimeError("Home Assistant WebSocket: Authentifizierung fehlt")
@@ -87,6 +109,8 @@ def websocket_command(command: dict) -> dict:
                 if not result.get("success"):
                     raise RuntimeError(f"Home Assistant WebSocket: {result.get('error', {})}")
                 return result.get("result", {})
+    except (OSError, WebSocketException) as exc:
+        raise RuntimeError(f"Home Assistant WebSocket-Verbindung unterbrochen: {exc}") from exc
     finally:
         connection.close()
 
@@ -101,12 +125,29 @@ def sync(contracts: list[dict], ha, today: date) -> str:
         contract, ambiguous = None, True
     current = ha("GET", "/states")
     existing = next((state for state in current if state.get("entity_id") == PRICE_ENTITY), None)
-    if existing and existing.get("attributes", {}).get("stromvertrag_source") != "stromvertrag":
+    source = existing.get("attributes", {}).get("stromvertrag_source") if existing else None
+    if source == "stromvertrag":
+        ha("DELETE", "/states/" + PRICE_ENTITY)
+        existing = None
+    elif existing and source != "stromvertrag_price":
         raise RuntimeError(f"{PRICE_ENTITY} ist bereits von einer anderen Quelle belegt")
-    attributes = {"friendly_name": name, "unit_of_measurement": "EUR/kWh", "icon": "mdi:currency-eur", "stromvertrag_source": "stromvertrag"}
-    if contract:
-        attributes.update(contract_id=contract["id"], meter_entity=contract["entity_id"])
-    ha("POST", "/states/" + PRICE_ENTITY, {"state": contract["price_kwh"] if contract else "unavailable", "attributes": attributes})
+    entries = ha("GET", "/config/config_entries/entry?domain=stromvertrag_price")
+    if not entries:
+        try:
+            flow = ha("POST", "/config/config_entries/flow", {"handler": "stromvertrag_price"})
+        except RuntimeError as exc:
+            return f"Integration installiert; Home Assistant neu starten ({exc})"
+        if flow.get("type") != "create_entry":
+            return f"Integration konnte nicht automatisch eingerichtet werden: {flow.get('type', 'unbekannt')}"
+        return "Integration eingerichtet; Sensor wird beim nächsten Abgleich geprüft"
+    if not existing:
+        return "Integration eingerichtet; Sensor noch nicht geladen. Home Assistant neu starten"
+    ha("POST", "/events/stromvertrag_price_update", {
+        "price": contract["price_kwh"] if contract else None,
+        "name": name,
+        "contract_id": contract["id"] if contract else None,
+        "meter_entity": contract["entity_id"] if contract else None,
+    })
     prefs = websocket_command({"type": "energy/get_prefs"})
     meter = contract.get("entity_id") if contract else None
     sources, changed = linked_sources(prefs, meter)

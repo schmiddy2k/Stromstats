@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 
 from model import calculate, consumption, fill_from_contract_readings, parse_date, preview_contract, sections, validate_contract
 import energy
+import history
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 DB = DATA_DIR / "contracts.sqlite3"
@@ -35,6 +36,7 @@ def database():
     conn.row_factory = sqlite3.Row
     conn.execute("CREATE TABLE IF NOT EXISTS contracts (id INTEGER PRIMARY KEY, body TEXT NOT NULL)")
     conn.execute("CREATE TABLE IF NOT EXISTS readings (contract_id INTEGER NOT NULL, day TEXT NOT NULL, kwh TEXT NOT NULL, PRIMARY KEY(contract_id, day))")
+    conn.execute("CREATE TABLE IF NOT EXISTS history_jobs (token TEXT PRIMARY KEY, status TEXT NOT NULL, detail TEXT NOT NULL, created_at TEXT NOT NULL)")
     return conn
 
 
@@ -46,7 +48,8 @@ def ha(method: str, path: str, body: dict | None = None):
     request = Request(SUPERVISOR + "/core/api" + path, data=json.dumps(body).encode() if body is not None else None, headers=headers, method=method)
     try:
         with urlopen(request, timeout=45) as response:
-            return json.load(response)
+            content = response.read()
+            return json.loads(content) if content else {}
     except HTTPError as exc:
         raise RuntimeError(f"Home Assistant API: HTTP {exc.code}") from exc
     except URLError as exc:
@@ -77,6 +80,23 @@ def sync_energy_forever():
         sync_energy_once()
         ENERGY_WAKE.wait(60)
         ENERGY_WAKE.clear()
+
+
+def run_history_job(plan: dict):
+    try:
+        history.apply_plan(plan)
+        status, detail = "completed", "Historische Kostenstatistiken wurden an Home Assistant übergeben"
+    except Exception as exc:
+        status, detail = "failed", f"Korrekturlauf angehalten: {exc}. Vor einem neuen Versuch die Energy-Statistiken prüfen."
+        logging.exception("Historische Energy-Kosten")
+    with database() as conn:
+        conn.execute("UPDATE history_jobs SET status=?, detail=? WHERE token=?", (status, detail, plan["token"]))
+
+
+def latest_history_job() -> dict | None:
+    with database() as conn:
+        row = conn.execute("SELECT token, status, detail, created_at FROM history_jobs ORDER BY created_at DESC LIMIT 1").fetchone()
+    return dict(row) if row else None
 
 
 def readings(contract_id: int):
@@ -225,6 +245,32 @@ class Handler(BaseHTTPRequestHandler):
             if self.headers.get("X-Requested-With") != "Stromvertrag":
                 raise ValueError("Ungültige Anfrage")
             self._send(200, sync_energy_once())
+        elif self.command == "GET" and path == "/api/energy/history/preview":
+            config = ha("GET", "/config")
+            tz = ZoneInfo(config.get("time_zone") or "Europe/Berlin")
+            plan = history.build_plan(contracts(), ha, datetime.now(tz).date())
+            self._send(200, history.public_preview(plan))
+        elif self.command == "GET" and path == "/api/energy/history/status":
+            self._send(200, latest_history_job() or {"status": "none"})
+        elif self.command == "POST" and path == "/api/energy/history/apply":
+            token = self._json().get("token")
+            if not isinstance(token, str) or len(token) != 64:
+                raise ValueError("Ungültige Vorschau")
+            config = ha("GET", "/config")
+            tz = ZoneInfo(config.get("time_zone") or "Europe/Berlin")
+            plan = history.build_plan(contracts(), ha, datetime.now(tz).date())
+            if plan["token"] != token:
+                raise ValueError("Die Daten haben sich seit der Vorschau geändert. Bitte erneut prüfen.")
+            if abs(plan["adjustment"]) < 0.000001:
+                raise ValueError("Die historischen Kosten stimmen bereits mit dem Vertragspreis überein")
+            with LOCK, database() as conn:
+                if conn.execute("SELECT 1 FROM history_jobs WHERE status='running'").fetchone():
+                    raise ValueError("Ein Korrekturlauf läuft bereits")
+                if conn.execute("SELECT 1 FROM history_jobs WHERE token=?", (token,)).fetchone():
+                    raise ValueError("Diese Vorschau wurde bereits angewendet oder begonnen")
+                conn.execute("INSERT INTO history_jobs VALUES(?,?,?,?)", (token, "running", "Korrekturlauf läuft", datetime.now().isoformat()))
+            Thread(target=run_history_job, args=(plan,), daemon=True, name="energy-history-backfill").start()
+            self._send(202, {"status": "running", "token": token})
         elif self.command == "POST" and path == "/api/preview":
             self._send(200, preview_contract(self._json()))
         elif self.command == "GET" and path == "/api/entities":
@@ -307,5 +353,9 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     with database(): pass
+    with database() as conn:
+        conn.execute("UPDATE history_jobs SET status='interrupted', detail='Lauf durch Neustart unterbrochen; Energy-Statistiken prüfen' WHERE status='running'")
+    if energy.install_integration():
+        logging.warning("Stromvertrag-Integration installiert oder aktualisiert; Home Assistant muss neu gestartet werden")
     Thread(target=sync_energy_forever, daemon=True, name="energy-price-sync").start()
     ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("PORT", "8099"))), Handler).serve_forever()

@@ -1,0 +1,10 @@
+{
+  "domain": "stromvertrag_price",
+  "name": "Stromvertrag Arbeitspreis",
+  "version": "0.11.0",
+  "documentation": "https://github.com/schmiddy2k/Stromstats",
+  "codeowners": [],
+  "config_flow": true,
+  "single_config_entry": true,
+  "iot_class": "local_push"
+}

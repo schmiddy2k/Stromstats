@@ -1,4 +1,5 @@
 import sys
+import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
@@ -9,6 +10,20 @@ import energy
 
 
 class EnergyTest(unittest.TestCase):
+    def test_install_integration_updates_only_its_own_files(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / "source"
+            target = Path(temp) / "homeassistant" / "custom_components" / "stromvertrag_price"
+            source.mkdir()
+            target.mkdir(parents=True)
+            for name in energy.INTEGRATION_FILES:
+                (source / name).write_text(name)
+            (target / "user_note.txt").write_text("keep")
+            with patch.object(energy, "INTEGRATION_SOURCE", source), patch.object(energy, "INTEGRATION_TARGET", target):
+                self.assertTrue(energy.install_integration())
+                self.assertFalse(energy.install_integration())
+            self.assertEqual((target / "user_note.txt").read_text(), "keep")
+
     def test_active_contract_boundaries_and_overlap(self):
         first = {"id": 1, "start": "2026-01-01", "end": "2026-06-30"}
         second = {"id": 2, "start": "2026-07-01", "end": "2026-12-31"}
@@ -65,11 +80,14 @@ class EnergyTest(unittest.TestCase):
         calls = []
         def ha(method, path, body=None):
             calls.append((method, path, body))
-            return [] if path == "/states" else {}
+            if path == "/states":
+                return [{"entity_id": energy.PRICE_ENTITY, "attributes": {"stromvertrag_source": "stromvertrag_price"}}]
+            if path.startswith("/config/config_entries/entry"):
+                return [{"domain": "stromvertrag_price"}]
+            return {}
         contract = {"id": 7, "start": "2026-01-01", "end": "2026-12-31", "entity_id": "sensor.meter", "price_kwh": "0.31"}
         energy.sync([contract], ha, date(2026, 5, 1))
-        self.assertEqual(calls[-1][2]["state"], "0.31")
-        self.assertEqual(calls[-1][2]["attributes"]["unit_of_measurement"], "EUR/kWh")
+        self.assertEqual([c for c in calls if c[1] == "/events/stromvertrag_price_update"][0][2]["price"], "0.31")
         self.assertEqual(websocket.call_args.args[0]["energy_sources"][0]["entity_energy_price"], energy.PRICE_ENTITY)
 
 
